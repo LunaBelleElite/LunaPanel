@@ -1,0 +1,144 @@
+{
+    "_fixtureNote": "Hand-authored fixture for LunaPanel tests. This reproduces the ThemeSettings.json schema used by EDHM-UI themes but is not a copy of, or close paraphrase of, any real theme file. Group names, element titles, credits and values below are invented.",
+    "language": "en",
+    "game": "ED_Odyssey",
+    "version": "1.0",
+    "credits": {
+        "theme": "LunaPanel Fixture Theme",
+        "author": "LunaPanel test fixtures",
+        "description": "Synthetic fixture theme authored for LunaPanel automated tests. Not a real EDHM-UI theme and not attributed to any real author.",
+        "preview": "",
+        "color": null
+    },
+    "ui_groups": [
+        {
+            "Name": "Group_ChatPanel",
+            "Title": "Chat Panel",
+            "Elements": [
+                {
+                    "Category": "Chat Panel",
+                    "Title": "Chat Panel Text Color",
+                    "File": "Advanced",
+                    "Section": "Constants",
+                    "Key": "x77|y77|z77|w77",
+                    "Value": -10481012,
+                    "ValueType": "Color"
+                },
+                {
+                    "Category": "Chat Panel",
+                    "Title": "Chat Panel Display Mode",
+                    "File": "Startup-Profile",
+                    "Section": "Constants",
+                    "Key": "x50",
+                    "Value": 100,
+                    "ValueType": "Preset"
+                }
+            ]
+        },
+        {
+            "Name": "Group_Radar",
+            "Title": "Radar & Targeting",
+            "Elements": [
+                {
+                    "Category": "Radar",
+                    "Title": "Radar Grid Color",
+                    "File": "Advanced",
+                    "Section": "Constants",
+                    "Key": "x78|y78|z78|w78",
+                    "Value": -938817506,
+                    "ValueType": "Color"
+                },
+                {
+                    "Category": "Radar",
+                    "Title": "Radar Enabled",
+                    "File": "Startup-Profile",
+                    "Section": "Constants",
+                    "Key": "y50",
+                    "Value": 1,
+                    "ValueType": "ONOFF"
+                }
+            ]
+        },
+        {
+            "Name": "Group_HUD",
+            "Title": "HUD Elements",
+            "Elements": [
+                {
+                    "Category": "HUD",
+                    "Title": "HUD Brightness",
+                    "File": "Startup-Profile",
+                    "Section": "Constants",
+                    "Key": "w50",
+                    "Value": 75,
+                    "ValueType": "Brightness"
+                },
+                {
+                    "Category": "HUD",
+                    "Title": "Suit HUD Accent",
+                    "File": "SuitHud",
+                    "Section": "Constants",
+                    "Key": "x90|y90|z90|w90",
+                    "Value": -56,
+                    "ValueType": "Color"
+                }
+            ]
+        },
+        {
+            "Name": "Group_Reserved",
+            "Title": "Reserved Panel",
+            "Elements": null
+        }
+    ],
+    "Presets": [
+        {
+            "Type": "RadarAttractionZone",
+            "Name": "Fixture Neutral Color",
+            "Index": 100
+        },
+        {
+            "Type": "RadarAttractionZone",
+            "Name": "Fixture Hostile Color",
+            "Index": 101
+        }
+    ],
+    "xml_profile": [
+        {
+            "key": "x150",
+            "value": 1.0
+        },
+        {
+            "key": "y150",
+            "value": 0.0
+        },
+        {
+            "key": "z150",
+            "value": 0.0
+        },
+        {
+            "key": "x151",
+            "value": 0.0
+        },
+        {
+            "key": "y151",
+            "value": 1.0
+        },
+        {
+            "key": "z151",
+            "value": 0.0
+        },
+        {
+            "key": "x152",
+            "value": 0.0
+        },
+        {
+            "key": "y152",
+            "value": 0.0
+        },
+        {
+            "key": "z152",
+            "value": 1.0
+        }
+    ],
+    "path": "",
+    "isFavorite": false
+}

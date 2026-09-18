@@ -1,0 +1,37 @@
+{
+    "_fixtureNote": "Hand-authored fixture for LunaPanel tests. Reproduces the EDHM-UI Settings.json schema; all instance paths below are invented placeholders, not taken from any real machine.",
+    "Version_ODYSS": "22.01",
+    "ActiveInstance": "Steam (Odyssey (Live))",
+    "GameInstances": [
+        {
+            "instance": "Steam",
+            "games": [
+                {
+                    "instance": "Steam (Odyssey (Live))",
+                    "name": "Odyssey (Live)",
+                    "key": "ED_Odyssey",
+                    "path": "C:\\Games\\Elite Dangerous\\odyssey-64"
+                },
+                {
+                    "instance": "Steam (Horizons (Live))",
+                    "name": "Horizons (Live)",
+                    "key": "ED_Odyssey",
+                    "path": ""
+                }
+            ]
+        },
+        {
+            "instance": "Epic Games",
+            "games": [
+                {
+                    "instance": "Epic Games (Odyssey (Live))",
+                    "name": "Odyssey (Live)",
+                    "key": "ED_Odyssey",
+                    "path": ""
+                }
+            ]
+        }
+    ],
+    "UserDataFolder": "C:\\FixtureUser\\EDHM_UI",
+    "PlayerJournal": "C:\\FixtureUser\\Saved Games\\Frontier Developments\\Elite Dangerous"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "pip-preset-engines-shields",
+  "name": "Engines +\nShields",
+  "steps": [
+    { "press": "ResetPowerDistribution", "repeat": 1 },
+    { "wait": 150 },
+    { "press": "IncreaseSystemsPower", "repeat": 4 },
+    { "press": "IncreaseEnginesPower", "repeat": 4 }
+  ]
+}

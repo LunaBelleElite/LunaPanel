@@ -1,0 +1,118 @@
+{
+  "//": "This is the PHONE/default starter layout. Its counterpart is starter-layout-tablet.json - SRV/NOMAD/RHINO/FIGHTER/ON FOOT are byte-for-byte identical between the two; keep them in sync if you edit any of those pages here.",
+  "schemaVersion": 1,
+  "pages": [
+    {
+      "name": "SHIP",
+      "templateId": "t30",
+      "showWhen": ["InMainShip"],
+      "slots": [
+        { "index": 0, "macro": "request-docking" },
+        { "index": 1, "action": "LandingGearToggle" },
+        { "index": 2, "action": "ToggleCargoScoop" },
+        { "index": 3, "action": "NightVisionToggle" },
+        { "index": 4, "action": "ShipSpotLightToggle" },
+        { "index": 5, "action": "DeployHeatSink" },
+        { "index": 6, "action": "ResetPowerDistribution" },
+        { "index": 7, "macro": "pip-preset-shields-engines" },
+        { "index": 8, "macro": "pip-preset-engines-shields" },
+        { "index": 9, "macro": "pip-preset-weapons-engines" },
+        { "index": 10, "action": "Supercruise" },
+        { "index": 11, "action": "Hyperspace" },
+        { "index": 12, "action": "FocusLeftPanel" },
+        { "index": 13, "action": "FocusRightPanel" },
+        { "index": 14, "action": "FocusCommsPanel" },
+        { "index": 15, "action": "FocusRadarPanel" },
+        { "index": 16, "action": "CycleNextPanel" },
+        { "index": 17, "macro": "disembark" },
+        { "index": 18, "action": "ExplorationFSSEnter" },
+        { "index": 19, "action": "ExplorationFSSQuit" },
+        { "index": 20, "action": "GalaxyMapOpen" },
+        { "index": 21, "action": "SystemMapOpen" },
+        { "index": 22, "action": "TargetNextRouteSystem" },
+        { "index": 23, "action": "SetSpeed75" },
+        { "index": 24, "macro": "nomad-dock-launch" },
+        { "index": 25, "macro": "srv-launch" },
+        { "index": 26, "action": "DeployHardpointToggle" },
+        { "index": 27, "action": "ToggleFlightAssist" },
+        { "index": 29, "action": "PlayerHUDModeToggle" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "SRV",
+      "templateId": "t18",
+      "showWhen": ["InSrv", "Vessel:testbuggy"],
+      "slots": [
+        { "index": 0, "action": "AutoBreakBuggyButton" },
+        { "index": 1, "action": "ToggleDriveAssist" },
+        { "index": 2, "action": "ToggleBuggyTurretButton" },
+        { "index": 3, "action": "HeadlightsBuggyButton" },
+        { "index": 4, "action": "NightVisionToggle" },
+        { "index": 5, "action": "BuggyCycleFireGroupNext" },
+        { "index": 6, "action": "ToggleCargoScoop_Buggy" },
+        { "index": 7, "action": "RecallDismissShip" },
+        { "index": 8, "action": "FocusLeftPanel_Buggy" },
+        { "index": 9, "action": "FocusRightPanel_Buggy" },
+        { "index": 10, "action": "GalaxyMapOpen_Buggy" },
+        { "index": 11, "action": "SystemMapOpen_Buggy" },
+        { "index": 12, "action": "UIFocus_Buggy" },
+        { "index": 13, "action": "PlayerHUDModeToggle_Buggy" },
+        { "index": 14, "action": "OpenCodexGoToDiscovery_Buggy" },
+        { "index": 15, "action": "PhotoCameraToggle_Buggy" },
+        { "index": 16, "macro": "srv-board-ship" },
+        { "index": 17, "macro": "srv-disembark" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "NOMAD",
+      "templateId": "t6",
+      "showWhen": ["InSrv", "Vessel:lander01"],
+      "slots": [
+        { "index": 0, "macro": "nomad-disembark" },
+        { "index": 1, "macro": "nomad-dock-launch" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "RHINO",
+      "templateId": "t6",
+      "slots": [
+        { "index": 0, "macro": "rhino-disembark" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "FIGHTER",
+      "templateId": "t6",
+      "showWhen": ["InFighter"],
+      "slots": [
+        { "index": 0, "macro": "request-docking" },
+        { "index": 1, "action": "FocusLeftPanel" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "ON FOOT",
+      "templateId": "t18",
+      "showWhen": ["OnFoot"],
+      "slots": [
+        { "index": 0, "action": "HumanoidPrimaryInteractButton" },
+        { "index": 1, "action": "HumanoidSecondaryInteractButton" },
+        { "index": 2, "action": "HumanoidOpenAccessPanelButton" },
+        { "index": 3, "action": "HumanoidToggleFlashlightButton" },
+        { "index": 4, "action": "HumanoidToggleNightVisionButton" },
+        { "index": 5, "action": "HumanoidToggleShieldsButton" },
+        { "index": 6, "action": "HumanoidHealthPack" },
+        { "index": 7, "action": "HumanoidBattery" },
+        { "index": 8, "action": "HumanoidSwitchToRechargeTool" },
+        { "index": 9, "action": "HumanoidSwitchToCompAnalyser" },
+        { "index": 10, "action": "HumanoidSwitchToSuitTool" },
+        { "index": 11, "action": "HumanoidHideWeaponButton" },
+        { "index": 12, "macro": "enter-cockpit" }
+      ],
+      "parked": []
+    }
+  ]
+}

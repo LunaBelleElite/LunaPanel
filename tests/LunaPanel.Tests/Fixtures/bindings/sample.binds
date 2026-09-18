@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Hand-authored fixture for LunaPanel tests. This is NOT a copy of any real
+  Elite Dangerous .binds file - the key choices below are invented and do not
+  reflect any specific player's real bindings. It reproduces only the format
+  (element names, attribute names, nesting) that a real Custom preset uses.
+-->
+<Root PresetName="Custom" MajorVersion="4" MinorVersion="2">
+	<KeyboardLayout>en-US</KeyboardLayout>
+	<FocusLeftPanel>
+		<Primary Device="Keyboard" Key="Key_F1" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</FocusLeftPanel>
+	<FocusCommsPanel>
+		<Primary Device="Keyboard" Key="Key_F2" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</FocusCommsPanel>
+	<FocusRightPanel>
+		<Primary Device="Keyboard" Key="Key_F3" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</FocusRightPanel>
+	<CycleNextPanel>
+		<Primary Device="Keyboard" Key="Key_Period">
+			<Modifier Device="Keyboard" Key="Key_LeftAlt" />
+		</Primary>
+		<Secondary Device="{NoDevice}" Key="" />
+	</CycleNextPanel>
+	<CyclePreviousPanel>
+		<Primary Device="Keyboard" Key="Key_Comma">
+			<Modifier Device="Keyboard" Key="Key_LeftAlt" />
+		</Primary>
+		<Secondary Device="{NoDevice}" Key="" />
+	</CyclePreviousPanel>
+	<UI_Up>
+		<Primary Device="Keyboard" Key="Key_UpArrow" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</UI_Up>
+	<UI_Down>
+		<Primary Device="Keyboard" Key="Key_DownArrow" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</UI_Down>
+	<UI_Left>
+		<Primary Device="Keyboard" Key="Key_LeftArrow" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</UI_Left>
+	<UI_Right>
+		<Primary Device="Keyboard" Key="Key_RightArrow" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</UI_Right>
+	<UI_Select>
+		<Primary Device="Keyboard" Key="Key_Enter" />
+		<Secondary Device="Mouse" Key="Mouse_1" />
+	</UI_Select>
+	<UI_Back>
+		<Primary Device="Keyboard" Key="Key_Backspace" />
+		<Secondary Device="Mouse" Key="Mouse_2" />
+	</UI_Back>
+	<LandingGearToggle>
+		<Primary Device="Keyboard" Key="Key_L" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</LandingGearToggle>
+	<ToggleCargoScoop>
+		<Primary Device="Keyboard" Key="Key_O" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</ToggleCargoScoop>
+	<ShipSpotLightToggle>
+		<Primary Device="Keyboard" Key="Key_W">
+			<Modifier Device="Keyboard" Key="Key_LeftShift" />
+		</Primary>
+		<Secondary Device="{NoDevice}" Key="" />
+	</ShipSpotLightToggle>
+</Root>

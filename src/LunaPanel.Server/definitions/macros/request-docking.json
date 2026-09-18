@@ -1,0 +1,13 @@
+{
+  "id": "request-docking",
+  "name": "Request\nDocking",
+  "steps": [
+    { "require": ["GuiFocus:NoFocus"] },
+    { "press": "FocusLeftPanel", "repeat": 1 },
+    { "gotoLeftPanelTab": "Contacts" },
+    { "press": "UI_Right", "repeat": 1 },
+    { "press": "UI_Select", "repeat": 1 },
+    { "press": "FocusLeftPanel", "repeat": 1 },
+    { "waitForEdge": ["Journal:DockingGranted"], "failOn": ["Journal:DockingDenied"], "failureDetailField": "Reason" }
+  ]
+}

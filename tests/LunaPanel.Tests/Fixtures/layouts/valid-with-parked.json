@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "pages": [
+    {
+      "name": "SHIP",
+      "templateId": "t6",
+      "slots": [
+        { "index": 0, "action": "LandingGearToggle" },
+        { "index": 1, "action": "ToggleCargoScoop" }
+      ],
+      "parked": [
+        { "index": 8, "action": "UseBoostJuice" }
+      ]
+    }
+  ]
+}

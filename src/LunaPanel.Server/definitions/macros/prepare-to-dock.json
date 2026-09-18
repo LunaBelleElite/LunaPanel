@@ -1,0 +1,16 @@
+{
+  "id": "prepare-to-dock",
+  "name": "Prepare to Dock",
+  "steps": [
+    { "press": "LandingGearToggle", "repeat": 1 },
+    { "waitForEdge": ["Journal:Docked"], "timeoutMs": 300000 },
+    { "wait": 3000 },
+    { "press": "UI_Up", "repeat": 1 },
+    { "pressUntil": "UI_Select", "condJournal": "RefuelAll", "timeoutMs": 2000, "maxAttempts": 10 },
+    { "press": "UI_Right", "repeat": 1 },
+    { "press": "UI_Select", "repeat": 1 },
+    { "press": "UI_Right", "repeat": 1 },
+    { "press": "UI_Select", "repeat": 1 },
+    { "press": "UI_Down", "repeat": 1 }
+  ]
+}

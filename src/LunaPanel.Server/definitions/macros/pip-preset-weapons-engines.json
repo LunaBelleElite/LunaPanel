@@ -1,0 +1,10 @@
+{
+  "id": "pip-preset-weapons-engines",
+  "name": "Weapons +\nEngines",
+  "steps": [
+    { "press": "ResetPowerDistribution", "repeat": 1 },
+    { "wait": 150 },
+    { "press": "IncreaseEnginesPower", "repeat": 4 },
+    { "press": "IncreaseWeaponsPower", "repeat": 4 }
+  ]
+}

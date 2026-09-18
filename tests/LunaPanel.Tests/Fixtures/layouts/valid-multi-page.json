@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "pages": [
+    {
+      "name": "SHIP",
+      "templateId": "t9",
+      "slots": [
+        { "index": 0, "action": "LandingGearToggle" },
+        { "index": 1, "action": "ToggleCargoScoop", "label": "SCOOP" },
+        { "index": 2, "action": "ShipSpotLightToggle" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "TARGET",
+      "templateId": "t6",
+      "slots": [
+        { "index": 0, "action": "CycleNextTarget" },
+        { "index": 1, "action": "CyclePreviousTarget" }
+      ],
+      "parked": []
+    }
+  ]
+}

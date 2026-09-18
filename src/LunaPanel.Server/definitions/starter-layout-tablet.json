@@ -1,0 +1,146 @@
+{
+  "//": "This is the TABLET starter layout. Its counterpart is starter-layout.json (the phone/default variant) - SRV/NOMAD/RHINO/FIGHTER/ON FOOT are byte-for-byte identical between the two; keep them in sync if you edit any of those pages here.",
+  "schemaVersion": 1,
+  "pages": [
+    {
+      "name": "SHIP",
+      "templateId": "t64",
+      "showWhen": ["InMainShip"],
+      "slots": [
+        { "index": 0, "action": "FocusLeftPanel" },
+        { "index": 1, "action": "FocusRightPanel" },
+        { "index": 2, "action": "FocusCommsPanel" },
+        { "index": 3, "action": "FocusRadarPanel" },
+        { "index": 4, "action": "CycleNextPanel" },
+        { "index": 5, "action": "CyclePreviousPanel" },
+        { "index": 6, "action": "CycleNextPage" },
+        { "index": 7, "action": "CyclePreviousPage" },
+
+        { "index": 8, "action": "Supercruise" },
+        { "index": 9, "action": "Hyperspace" },
+        { "index": 10, "action": "GalaxyMapOpen" },
+        { "index": 11, "action": "SystemMapOpen" },
+        { "index": 12, "action": "TargetNextRouteSystem" },
+        { "index": 13, "action": "SetSpeed75" },
+        { "index": 14, "action": "ExplorationFSSEnter" },
+        { "index": 15, "action": "ExplorationFSSQuit" },
+
+        { "index": 16, "action": "ResetPowerDistribution" },
+        { "index": 17, "action": "IncreaseSystemsPower" },
+        { "index": 18, "action": "IncreaseEnginesPower" },
+        { "index": 19, "action": "IncreaseWeaponsPower" },
+        { "index": 20, "macro": "pip-preset-engines-shields" },
+        { "index": 21, "macro": "pip-preset-engines-weapons" },
+        { "index": 22, "macro": "pip-preset-shields-engines" },
+        { "index": 23, "macro": "pip-preset-shields-weapons" },
+        { "index": 24, "macro": "pip-preset-weapons-engines" },
+        { "index": 25, "macro": "pip-preset-weapons-shields" },
+
+        { "index": 26, "action": "UpThrustButton", "hold": true },
+        { "index": 27, "action": "DownThrustButton", "hold": true },
+        { "index": 28, "action": "LeftThrustButton", "hold": true },
+        { "index": 29, "action": "RightThrustButton", "hold": true },
+
+        { "index": 32, "action": "PrimaryFire" },
+        { "index": 33, "action": "SecondaryFire" },
+        { "index": 34, "action": "CycleNextHostileTarget" },
+        { "index": 35, "action": "SelectHighestThreat" },
+        { "index": 36, "action": "DeployHardpointToggle" },
+        { "index": 37, "action": "ToggleFlightAssist" },
+        { "index": 38, "action": "OrbitLinesToggle" },
+        { "index": 39, "action": "WingNavLock" },
+
+        { "index": 40, "macro": "request-docking" },
+        { "index": 41, "macro": "prepare-to-dock" },
+        { "index": 42, "action": "ToggleCargoScoop" },
+        { "index": 43, "action": "NightVisionToggle" },
+        { "index": 44, "action": "ShipSpotLightToggle" },
+        { "index": 45, "action": "DeployHeatSink" },
+        { "index": 46, "macro": "nomad-dock-launch" },
+        { "index": 47, "macro": "srv-launch" },
+        { "index": 48, "macro": "disembark" },
+
+        { "index": 49, "action": "PlayerHUDModeToggle" },
+        { "index": 50, "action": "TriggerColonisationModule" },
+        { "index": 51, "action": "UI_Select" },
+        { "index": 52, "action": "LandingGearToggle" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "SRV",
+      "templateId": "t18",
+      "showWhen": ["InSrv", "Vessel:testbuggy"],
+      "slots": [
+        { "index": 0, "action": "AutoBreakBuggyButton" },
+        { "index": 1, "action": "ToggleDriveAssist" },
+        { "index": 2, "action": "ToggleBuggyTurretButton" },
+        { "index": 3, "action": "HeadlightsBuggyButton" },
+        { "index": 4, "action": "NightVisionToggle" },
+        { "index": 5, "action": "BuggyCycleFireGroupNext" },
+        { "index": 6, "action": "ToggleCargoScoop_Buggy" },
+        { "index": 7, "action": "RecallDismissShip" },
+        { "index": 8, "action": "FocusLeftPanel_Buggy" },
+        { "index": 9, "action": "FocusRightPanel_Buggy" },
+        { "index": 10, "action": "GalaxyMapOpen_Buggy" },
+        { "index": 11, "action": "SystemMapOpen_Buggy" },
+        { "index": 12, "action": "UIFocus_Buggy" },
+        { "index": 13, "action": "PlayerHUDModeToggle_Buggy" },
+        { "index": 14, "action": "OpenCodexGoToDiscovery_Buggy" },
+        { "index": 15, "action": "PhotoCameraToggle_Buggy" },
+        { "index": 16, "macro": "srv-board-ship" },
+        { "index": 17, "macro": "srv-disembark" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "NOMAD",
+      "templateId": "t6",
+      "showWhen": ["InSrv", "Vessel:lander01"],
+      "slots": [
+        { "index": 0, "macro": "nomad-disembark" },
+        { "index": 1, "macro": "nomad-dock-launch" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "RHINO",
+      "templateId": "t6",
+      "slots": [
+        { "index": 0, "macro": "rhino-disembark" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "FIGHTER",
+      "templateId": "t6",
+      "showWhen": ["InFighter"],
+      "slots": [
+        { "index": 0, "macro": "request-docking" },
+        { "index": 1, "action": "FocusLeftPanel" }
+      ],
+      "parked": []
+    },
+    {
+      "name": "ON FOOT",
+      "templateId": "t18",
+      "showWhen": ["OnFoot"],
+      "slots": [
+        { "index": 0, "action": "HumanoidPrimaryInteractButton" },
+        { "index": 1, "action": "HumanoidSecondaryInteractButton" },
+        { "index": 2, "action": "HumanoidOpenAccessPanelButton" },
+        { "index": 3, "action": "HumanoidToggleFlashlightButton" },
+        { "index": 4, "action": "HumanoidToggleNightVisionButton" },
+        { "index": 5, "action": "HumanoidToggleShieldsButton" },
+        { "index": 6, "action": "HumanoidHealthPack" },
+        { "index": 7, "action": "HumanoidBattery" },
+        { "index": 8, "action": "HumanoidSwitchToRechargeTool" },
+        { "index": 9, "action": "HumanoidSwitchToCompAnalyser" },
+        { "index": 10, "action": "HumanoidSwitchToSuitTool" },
+        { "index": 11, "action": "HumanoidHideWeaponButton" },
+        { "index": 12, "macro": "enter-cockpit" }
+      ],
+      "parked": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "pages": [
+    {
+      "name": "SHIP",
+      "templateId": "t12",
+      "slots": [
+        { "index": 0, "action": "LandingGearToggle" },
+        { "index": 3, "action": "IncreaseEnginesPower", "longPress": { "macro": "pips-engines" } }
+      ],
+      "parked": []
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Packages the self-contained publish output (publish/tray-win-x64, built via
+  dotnet publish of LunaPanel.Tray.csproj, self contained, win-x64) into an
+  MSI. Only that publish folder is harvested - nothing from the repo root,
+  .claude/, ref/docs/, tests/, or memory/handoff files ever goes in.
+
+  UpgradeCode is fixed forever - never regenerate it, or upgrades stop
+  detecting the prior install.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="LunaPanel"
+           Manufacturer="LunaBelleElite"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="76c0123c-2a91-4c0b-b30d-2488198004a2"
+           Scope="perUser">
+
+    <!--
+      Schedule="afterInstallExecute" (not the default afterInstallValidate) -
+      the O45 fix, confirmed 2026-09-17. The default schedules
+      RemoveExistingProducts at sequence 1401, before InstallInitialize
+      (1500) and well before Wix4CloseApplications (3999, right before
+      InstallFiles at 4000) ever gets to terminate a running LunaPanel.Tray.exe.
+      That means an upgrade would remove the OLD product's files while the
+      exe still has them open - if Windows schedules those files for
+      delete-on-reboot, the freshly installed copy could be gone after the
+      next restart, invisible until then. afterInstallExecute moves
+      RemoveExistingProducts to run after the new files are already
+      installed (late in the sequence, after InstallFiles), so
+      CloseApplication has already closed the app before either the new
+      files land or the old ones are removed. See util:CloseApplication's
+      own comment below for the rest of this sequencing story.
+    -->
+    <MajorUpgrade Schedule="afterInstallExecute" DowngradeErrorMessage="A newer version of LunaPanel is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="LunaPanel" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuLunaPanel" Name="LunaPanel" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\**">
+        <Exclude Files="$(var.PublishDir)\**\*.pdb" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcut" Directory="ProgramMenuLunaPanel" Guid="1f6a9e2f-3f8f-4c58-9d3e-6a4b7d2c9e11">
+      <Shortcut Id="LunaPanelStartMenuShortcut"
+                Name="LunaPanel"
+                Description="Multi-Panel controller for Elite Dangerous"
+                Target="[INSTALLFOLDER]LunaPanel.Tray.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveProgramMenuLunaPanel" Directory="ProgramMenuLunaPanel" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\LunaBelleElite\LunaPanel" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="LunaPanel" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <Icon Id="LunaPanelIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="LunaPanelIcon" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!--
+      Makes sure nothing has LunaPanel's own files open before they are
+      replaced. This is what allows the app's self-update path
+      (LunaPanel.Tray's UpdateCheckFlow) to simply spawn
+      "msiexec /i <msi> /quiet /norestart" and return, with no quit/wait/
+      relaunch sequencing of its own: the installer, not the app, owns
+      closing the running copy.
+
+      TerminateProcess="0" with no CloseMessage is a plain TerminateProcess
+      at exit code 0, by the commander's own confirmed choice - LunaPanel is
+      a background utility with no unsaved state, so a graceful WM_CLOSE
+      round trip buys nothing and only adds a way for the close to be
+      ignored. RebootPrompt="no" because a file this installer replaces is
+      never in use by anything else once that process is gone; a silent
+      install is the last place a machine should decide to restart itself.
+
+      Target is the process NAME, not a path - the running copy could have
+      been started from anywhere (including a previous install location).
+
+      SEQUENCING, MEASURED - and now fixed (O45, 2026-09-17). Read back out
+      of the built MSI, the Util extension puts Wix4CloseApplications at
+      sequence 3999, immediately before InstallFiles at 4000 - exactly right
+      for "terminate it before replacing its files". But MajorUpgrade's
+      DEFAULT schedule (afterInstallValidate) puts RemoveExistingProducts at
+      1401, which is BEFORE that: on an upgrade, the old product would be
+      uninstalled while LunaPanel.Tray.exe was still running, and only then
+      would the process be terminated - a window where a delete-on-reboot
+      flag on the newly-installed files could survive to the next restart.
+      Rescheduling the close action earlier (before RemoveExistingProducts)
+      was tried and rejected: at 1401 it lands ahead of InstallInitialize
+      (1500), and the deferred action it schedules cannot run outside the
+      install script - there is no slot both after InstallInitialize and
+      before a RemoveExistingProducts scheduled this early. The actual fix,
+      applied above: `MajorUpgrade Schedule="afterInstallExecute"`, which
+      moves RemoveExistingProducts to run after the new files are already in
+      place, so CloseApplication has already closed the app before either
+      copy's files are touched.
+    -->
+    <util:CloseApplication Id="CloseLunaPanelTray"
+                           Target="LunaPanel.Tray.exe"
+                           TerminateProcess="0"
+                           RebootPrompt="no" />
+
+    <!--
+      Always launch LunaPanel once an install finishes - the commander's
+      confirmed decision, and one behavior for every path: a fresh manual
+      double-click, a manual upgrade over an older install, and the silent
+      self-update alike. The self-update case is the one that needs it (the
+      CloseApplication above has just terminated the running copy, and
+      nothing else would ever start it again), but making it conditional on
+      "was this a self-update" would mean the installer having to be told,
+      which is the fragile flag this design deliberately avoids.
+
+      Wix4ShellExec_$(sys.BUILDARCHSHORT) is the Util extension's own
+      ShellExecute custom action; it launches whatever WixShellExecTarget
+      holds. Confirmed against the installed WixToolset.Util.wixext 5.0.2
+      itself (its wixlib names exactly these: the property WixShellExecTarget
+      and the per-architecture action ids), not from memory of an older WiX.
+
+      Condition="NOT Installed OR REINSTALL" would skip a major upgrade,
+      whose new package is not yet "Installed" but whose old one is being
+      removed in the same transaction - so the condition is written as the
+      one thing that must never relaunch: an uninstall.
+
+      The target needs BOTH elements below, and each one is there for a
+      reason the build itself stated:
+
+      - The Property row, because the Util extension's wixlib carries a hard
+        reference to a Property named exactly "WixShellExecTarget", and a
+        SetProperty alone does not create one - without it the link fails
+        with WIX0094 "the identifier 'Property:WixShellExecTarget' could not
+        be found". Its value here is only a placeholder.
+      - The SetProperty, because a Property table value is a literal and is
+        never formatted: "[INSTALLFOLDER]LunaPanel.Tray.exe" authored as a
+        plain Property would reach the custom action with the brackets still
+        in it, and WiX warns WIX1077 on exactly that. SetProperty emits a
+        custom action that formats the value at install time, when
+        INSTALLFOLDER actually holds a path.
+
+      The custom action SetProperty emits is named "SetWixShellExecTarget"
+      (the property id with "Set" in front), which is what the launch action
+      below is sequenced after - so the target is formatted before anything
+      tries to launch it.
+    -->
+    <Property Id="WixShellExecTarget" Value="LunaPanel.Tray.exe" />
+    <SetProperty Id="WixShellExecTarget"
+                 Value="[INSTALLFOLDER]LunaPanel.Tray.exe"
+                 After="InstallFinalize"
+                 Sequence="execute" />
+    <CustomActionRef Id="Wix4ShellExec_$(sys.BUILDARCHSHORT)" />
+    <InstallExecuteSequence>
+      <Custom Action="Wix4ShellExec_$(sys.BUILDARCHSHORT)" After="SetWixShellExecTarget" Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

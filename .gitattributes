@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repo, regardless of the checkout
+# platform's line-ending default. Stops git's "LF will be replaced by CRLF"
+# warnings on every commit from a Windows checkout.
+* text=auto eol=lf

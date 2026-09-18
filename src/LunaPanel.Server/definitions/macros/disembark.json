@@ -1,0 +1,22 @@
+{
+  "id": "disembark",
+  "name": "Disembark",
+  "steps": [
+    {
+      "branch": ["Docked"],
+      "then": [
+        { "require": ["GuiFocus:NoFocus"] },
+        { "press": "UI_Down", "repeat": 3 },
+        { "wait": 150 },
+        { "press": "UI_Select", "repeat": 1 }
+      ],
+      "else": [
+        { "require": ["Landed", "GuiFocus:NoFocus"] },
+        { "press": "FocusRadarPanel", "repeat": 1 },
+        { "press": "UI_Down", "repeat": 1 },
+        { "wait": 150 },
+        { "press": "UI_Select", "repeat": 1 }
+      ]
+    }
+  ]
+}

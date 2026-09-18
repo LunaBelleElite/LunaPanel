@@ -1,0 +1,10 @@
+{
+  "id": "nomad-disembark",
+  "name": "Nomad Disembark",
+  "steps": [
+    { "require": ["GuiFocus:NoFocus"] },
+    { "press": "FocusRadarPanel_Buggy", "repeat": 1 },
+    { "press": "UI_Right", "repeat": 1 },
+    { "press": "UI_Select", "repeat": 1 }
+  ]
+}

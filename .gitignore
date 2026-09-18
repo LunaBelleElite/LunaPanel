@@ -1,0 +1,24 @@
+# Your project's own build artefacts go here.
+#
+# This template is deliberately language-agnostic, so it does NOT guess at a
+# stack -- picking __pycache__/ over node_modules/, bin/, obj/ or target/ would
+# be arbitrary. But that means a new project's first test run leaves untracked
+# junk to clean by hand before its first commit, which two separate testers hit
+# independently. Add your stack's entries below on day one and it never comes up
+# again.
+
+# .NET build output
+bin/
+obj/
+
+# dotnet publish output and built MSI installers - regenerated from source,
+# never tracked. installer/Package.wxs itself (the WiX source) is still
+# tracked - only its build output is excluded here.
+publish/
+installer/*.msi
+installer/*.wixpdb
+
+# Local dev convenience, not for distribution: pins NuGet to the machine-local
+# package cache so restores are provably offline. A public clone must use the
+# default sources, so this file must never be committed.
+NuGet.Config

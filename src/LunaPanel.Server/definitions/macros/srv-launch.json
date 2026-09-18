@@ -1,0 +1,12 @@
+{
+  "id": "srv-launch",
+  "name": "Launch\nSRV",
+  "steps": [
+    { "require": ["GuiFocus:NoFocus"] },
+    { "press": "FocusRadarPanel", "repeat": 1 },
+    { "press": "UI_Down", "repeat": 2 },
+    { "press": "UI_Right", "repeat": 1 },
+    { "pressUntil": "UI_Select", "condJournal": "LaunchSRV", "timeoutMs": 1500, "maxAttempts": 3 },
+    { "press": "FocusRadarPanel", "repeat": 1 }
+  ]
+}

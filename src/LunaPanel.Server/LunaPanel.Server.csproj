@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\LunaPanel.Core\LunaPanel.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="definitions\catalogue.json" LogicalName="LunaPanel.Server.definitions.catalogue.json" />
+    <EmbeddedResource Include="definitions\macros\pip-preset-engines-weapons.json" LogicalName="LunaPanel.Server.definitions.macros.pip-preset-engines-weapons.json" />
+    <EmbeddedResource Include="definitions\macros\pip-preset-shields-weapons.json" LogicalName="LunaPanel.Server.definitions.macros.pip-preset-shields-weapons.json" />
+    <EmbeddedResource Include="definitions\macros\pip-preset-shields-engines.json" LogicalName="LunaPanel.Server.definitions.macros.pip-preset-shields-engines.json" />
+    <EmbeddedResource Include="definitions\macros\pip-preset-weapons-engines.json" LogicalName="LunaPanel.Server.definitions.macros.pip-preset-weapons-engines.json" />
+    <EmbeddedResource Include="definitions\macros\pip-preset-engines-shields.json" LogicalName="LunaPanel.Server.definitions.macros.pip-preset-engines-shields.json" />
+    <EmbeddedResource Include="definitions\macros\pip-preset-weapons-shields.json" LogicalName="LunaPanel.Server.definitions.macros.pip-preset-weapons-shields.json" />
+    <EmbeddedResource Include="definitions\macros\disembark.json" LogicalName="LunaPanel.Server.definitions.macros.disembark.json" />
+    <EmbeddedResource Include="definitions\macros\request-docking.json" LogicalName="LunaPanel.Server.definitions.macros.request-docking.json" />
+    <EmbeddedResource Include="definitions\macros\nomad-dock-launch.json" LogicalName="LunaPanel.Server.definitions.macros.nomad-dock-launch.json" />
+    <EmbeddedResource Include="definitions\macros\nomad-disembark.json" LogicalName="LunaPanel.Server.definitions.macros.nomad-disembark.json" />
+    <EmbeddedResource Include="definitions\macros\srv-disembark.json" LogicalName="LunaPanel.Server.definitions.macros.srv-disembark.json" />
+    <EmbeddedResource Include="definitions\macros\rhino-disembark.json" LogicalName="LunaPanel.Server.definitions.macros.rhino-disembark.json" />
+    <EmbeddedResource Include="definitions\macros\enter-cockpit.json" LogicalName="LunaPanel.Server.definitions.macros.enter-cockpit.json" />
+    <EmbeddedResource Include="definitions\macros\srv-board-ship.json" LogicalName="LunaPanel.Server.definitions.macros.srv-board-ship.json" />
+    <EmbeddedResource Include="definitions\macros\srv-launch.json" LogicalName="LunaPanel.Server.definitions.macros.srv-launch.json" />
+    <EmbeddedResource Include="definitions\macros\prepare-to-dock.json" LogicalName="LunaPanel.Server.definitions.macros.prepare-to-dock.json" />
+    <EmbeddedResource Include="definitions\starter-layout.json" LogicalName="LunaPanel.Server.definitions.starter-layout.json" />
+    <EmbeddedResource Include="definitions\starter-layout-tablet.json" LogicalName="LunaPanel.Server.definitions.starter-layout-tablet.json" />
+  </ItemGroup>
+</Project>

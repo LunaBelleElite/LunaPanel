@@ -1,0 +1,10 @@
+{ "timestamp":"2026-01-01T12:00:00Z", "event":"Fileheader", "part":1, "language":"English/UK", "Odyssey":true, "gameversion":"4.0.0.1", "build":"r000000/r0 " }
+{ "timestamp":"2026-01-01T12:00:04Z", "event":"Commander", "FID":"F0000001", "Name":"Testcmdr" }
+{ "timestamp":"2026-01-01T12:00:04Z", "event":"Materials", "Raw":[ { "Name":"iron", "Count":300 }, { "Name":"nickel", "Count":290 } ], "Manufactured":[], "Encoded":[] }
+{ "timestamp":"2026-01-01T12:00:05Z", "event":"LoadGame", "FID":"F0000001", "Commander":"Testcmdr", "Horizons":true, "Odyssey":true, "Ship":"Lander01", "Ship_Localised":"Nomad", "ShipID":17, "ShipName":"", "ShipIdent":"", "FuelLevel":0.450000, "FuelCapacity":0.450000, "GameMode":"Solo", "Credits":100000, "Loan":0, "language":"English/UK", "gameversion":"4.0.0.1", "build":"r000000/r0 " }
+{ "timestamp":"2026-01-01T12:00:05Z", "event":"Rank", "Combat":1, "Trade":2, "Explore":8, "Soldier":0, "Exobiologist":5, "Empire":0, "Federation":0, "CQC":0 }
+{ "timestamp":"2026-01-01T12:00:06Z", "event":"Location", "DistFromStarLS":42.0, "Docked":false, "StarSystem":"Test Sector AB-C d1-23", "SystemAddress":100000001, "Body":"Test Sector AB-C d1-23 A 1 a", "BodyID":9, "BodyType":"Planet" }
+{ "timestamp":"2026-01-01T12:00:06Z", "event":"Music", "MusicTrack":"SRV" }
+{ "timestamp":"2026-01-01T12:01:11Z", "event":"Loadout", "Ship":"krait_mkii", "ShipID":22, "HullValue":0, "Modules":[ { "Slot":"Slot01", "Item":"testmodule", "On":true, "Priority":1 } ] }
+{ "timestamp":"2026-01-01T12:03:29Z", "event":"SupercruiseEntry", "Taxi":false, "Multicrew":false, "StarSystem":"Test Sector AB-C d1-23", "SystemAddress":100000001 }
+{ "timestamp":"2026-01-01T12:04:02Z", "event":"SupercruiseExit", "Taxi":false, "Multicrew":false, "StarSystem":"Test Sector AB-C d1-23", "SystemAddress":100000001, "Body":"Test Sector AB-C d1-23 A 1 a", "BodyID":9, "BodyType":"Planet" }

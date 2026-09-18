@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Overrides Directory.Build.props' repo-wide net10.0 here, and NOWHERE
+    else (see that file's own remarks) - this is the one project that needs
+    a Windows-only target framework (WinForms), and keeping that off every
+    other project is what keeps the whole 981-test suite buildable and
+    runnable on any OS the SDK supports.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>LunaPanel.Tray</RootNamespace>
+    <ApplicationIcon>lunapanel.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!--
+    Embedded as well as set as ApplicationIcon: ApplicationIcon only
+    stamps the .exe, while NotifyIcon needs an Icon instance at the
+    tray's own small size. Reading it back from the assembly keeps the
+    icon a single source rather than a file that must ship beside the
+    exe and can go missing.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="lunapanel.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LunaPanel.Server\LunaPanel.Server.csproj" />
+  </ItemGroup>
+
+  <!--
+    Stamps the running version onto this assembly from CHANGELOG.md's own
+    topmost "## ver-..." header - the single source of truth this project
+    already keeps current by hand (see the versioning-scheme section of the
+    repo root's CLAUDE.md) - rather than hand-syncing a second copy that
+    could drift. AboutForm (LunaPanel.Tray) reads it back via
+    FileVersionInfo.GetVersionInfo(...).ProductVersion. No <Version>/
+    <AssemblyVersion>/<FileVersion> property is set anywhere in this repo
+    (confirmed by grep), so GenerateAssemblyInfo never emits its own
+    AssemblyInformationalVersionAttribute here and this is the only one.
+  -->
+  <PropertyGroup>
+    <!--
+      The SDK emits its own AssemblyInformationalVersionAttribute by default
+      (derived from $(Version), which itself defaults to "1.0.0" even when
+      never set) - suppressed here so the AssemblyAttribute item below is
+      the only one, rather than a CS0579 duplicate-attribute build error.
+    -->
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+    <LunaPanelChangelogPath>$(MSBuildThisFileDirectory)..\..\CHANGELOG.md</LunaPanelChangelogPath>
+    <LunaPanelChangelogText>$([System.IO.File]::ReadAllText('$(LunaPanelChangelogPath)'))</LunaPanelChangelogText>
+    <LunaPanelVersion>$([System.Text.RegularExpressions.Regex]::Match($(LunaPanelChangelogText), '## (ver-\S+)').Groups[1].Value)</LunaPanelVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyInformationalVersionAttribute">
+      <_Parameter1>$(LunaPanelVersion)</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Root PresetName="Custom" MajorVersion="4" MinorVersion="2">
+	<KeyboardLayout>en-US</KeyboardLayout>
+	<PrimaryKeyboardSecondaryNoDevice>
+		<Primary Device="Keyboard" Key="Key_A" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</PrimaryKeyboardSecondaryNoDevice>
+	<PrimaryNoDeviceSecondaryKeyboard>
+		<Primary Device="{NoDevice}" Key="" />
+		<Secondary Device="Keyboard" Key="Key_B" />
+	</PrimaryNoDeviceSecondaryKeyboard>
+	<PrimaryMouseSecondaryKeyboard>
+		<Primary Device="Mouse" Key="Mouse_1" />
+		<Secondary Device="Keyboard" Key="Key_C" />
+	</PrimaryMouseSecondaryKeyboard>
+	<FullyUnbound>
+		<Primary Device="{NoDevice}" Key="" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</FullyUnbound>
+	<SingleModifier>
+		<Primary Device="Keyboard" Key="Key_S">
+			<Modifier Device="Keyboard" Key="Key_LeftShift" />
+		</Primary>
+		<Secondary Device="{NoDevice}" Key="" />
+	</SingleModifier>
+	<TwoModifiers>
+		<Primary Device="Keyboard" Key="Key_Space">
+			<Modifier Device="Keyboard" Key="Key_LeftControl" />
+			<Modifier Device="Keyboard" Key="Key_LeftAlt" />
+		</Primary>
+		<Secondary Device="{NoDevice}" Key="" />
+	</TwoModifiers>
+	<DuplicatedElement>
+		<Primary Device="Keyboard" Key="Key_D" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</DuplicatedElement>
+	<DuplicatedElement>
+		<Primary Device="Keyboard" Key="Key_Z" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</DuplicatedElement>
+	<LowercaseKeyName>
+		<Primary Device="Keyboard" Key="Key_backslash" />
+		<Secondary Device="{NoDevice}" Key="" />
+	</LowercaseKeyName>
+</Root>

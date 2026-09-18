@@ -1,0 +1,12 @@
+{
+  "id": "nomad-dock-launch",
+  "name": "Nomad\nDock/Launch",
+  "steps": [
+    { "require": ["GuiFocus:NoFocus"] },
+    { "press": "FocusRadarPanel", "repeat": 1 },
+    { "press": "UI_Down", "repeat": 1 },
+    { "press": "UI_Right", "repeat": 1 },
+    { "press": "UI_Select", "repeat": 1 },
+    { "press": "FocusRadarPanel", "repeat": 1 }
+  ]
+}

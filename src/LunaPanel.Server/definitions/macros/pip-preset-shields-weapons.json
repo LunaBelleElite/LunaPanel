@@ -1,0 +1,10 @@
+{
+  "id": "pip-preset-shields-weapons",
+  "name": "Shields +\nWeapons",
+  "steps": [
+    { "press": "ResetPowerDistribution", "repeat": 1 },
+    { "wait": 150 },
+    { "press": "IncreaseWeaponsPower", "repeat": 4 },
+    { "press": "IncreaseSystemsPower", "repeat": 4 }
+  ]
+}

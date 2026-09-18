@@ -1,0 +1,62 @@
+name: Bug report
+description: Something's not working right
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this — every bug report makes
+        LunaPanel a little more solid for the next commander who hits the
+        same thing. A log file usually turns "it broke" into something I can
+        actually chase down, so please attach one if you can.
+
+  - type: input
+    id: version
+    attributes:
+      label: LunaPanel version
+      description: Right-click the tray icon → About. It looks like `ver-1.0.0.0`.
+      placeholder: ver-1.0.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What were you doing right before it happened? The more exact, the better — "pressed the Confirm button on the SHIP page while docked" beats "a button didn't work."
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log file
+      description: |
+        Grab the relevant day's log from `%LocalAppData%\LunaPanel\Logs\` (a new file is written each day, named like `lunapanel-20260917.log`) and drag it in here. If you're not sure which one, the most recent one is usually the right one.
+      placeholder: Drag and drop the log file here, or paste the relevant lines.
+
+  - type: input
+    id: device
+    attributes:
+      label: What device were you controlling from?
+      description: Phone, tablet, browser — whatever's relevant.
+      placeholder: e.g. iPad, Safari
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I checked existing issues and didn't see this one already reported.
+          required: true

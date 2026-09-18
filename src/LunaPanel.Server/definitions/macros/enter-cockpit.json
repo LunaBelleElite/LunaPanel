@@ -1,0 +1,9 @@
+{
+  "id": "enter-cockpit",
+  "name": "Enter Cockpit",
+  "steps": [
+    { "require": ["GuiFocus:NoFocus"] },
+    { "press": "HumanoidPrimaryInteractButton", "repeat": 1 },
+    { "press": "UI_Select", "repeat": 1 }
+  ]
+}
