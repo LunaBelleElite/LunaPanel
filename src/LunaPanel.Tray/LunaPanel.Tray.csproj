@@ -31,52 +31,16 @@
   </ItemGroup>
 
   <!--
-    Stamps the running version onto this assembly from CHANGELOG.md's own
-    topmost "## ver-..." header - the single source of truth this project
-    already keeps current by hand (see the versioning-scheme section of the
-    repo root's CLAUDE.md) - rather than hand-syncing a second copy that
-    could drift. AboutForm (LunaPanel.Tray) reads it back via
+    Version stamping (FileVersion/AssemblyVersion/InformationalVersion, all
+    derived from CHANGELOG.md's topmost "## ver-..." header) lives in the
+    repo root's Directory.Build.props now, not here - moved 2026-09-18 so
+    LunaPanel.Core.dll and LunaPanel.Server.dll get the same real,
+    incrementing FileVersion that Tray already had, instead of staying at
+    the SDK's default "1.0.0.0" forever (which made Windows Installer
+    silently skip recopying them on every upgrade - see that file's own
+    comment for the full incident). AboutForm (LunaPanel.Tray) still reads
+    the informational string back via
     FileVersionInfo.GetVersionInfo(...).ProductVersion.
-
-    LunaPanelVersionNumeric ALSO drives <FileVersion>/<AssemblyVersion> -
-    the real Win32 version resource, distinct from the informational string
-    above and from what AboutForm shows. This is not cosmetic: confirmed
-    2026-09-18 (a real failed self-update on a real machine) that Windows
-    Installer's own file-servicing decision - "does this file need
-    overwriting during an upgrade" - reads FileVersion, not
-    InformationalVersion. Before this fix, no <FileVersion>/<AssemblyVersion>
-    was ever set, so the .NET SDK defaulted both to the literal "1.0.0.0" on
-    EVERY build regardless of what actually changed - confirmed by reading
-    the File table's Version column back out of two different MSIs
-    (ver-0.53.0.2-dev and ver-1.0.0.0) and finding it identical in both.
-    Windows Installer saw "same component, same-or-not-newer file version"
-    and silently skipped recopying the file: the upgrade transaction
-    reported success, the product registration was correctly updated to the
-    new version, but the actual bytes on disk were never replaced. Stamping
-    a real, incrementing FileVersion here is the fix - MSI's own numeric
-    version-compare rules (up to 65535 per field) match this project's own
-    A.B.C.D scheme exactly, so the plain numeric form (no "ver-" prefix, no
-    "-dev" suffix - neither is valid in this field) is used unmodified.
   -->
-  <PropertyGroup>
-    <!--
-      The SDK emits its own AssemblyInformationalVersionAttribute by default
-      (derived from $(Version), which itself defaults to "1.0.0" even when
-      never set) - suppressed here so the AssemblyAttribute item below is
-      the only one, rather than a CS0579 duplicate-attribute build error.
-    -->
-    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
-    <LunaPanelChangelogPath>$(MSBuildThisFileDirectory)..\..\CHANGELOG.md</LunaPanelChangelogPath>
-    <LunaPanelChangelogText>$([System.IO.File]::ReadAllText('$(LunaPanelChangelogPath)'))</LunaPanelChangelogText>
-    <LunaPanelVersion>$([System.Text.RegularExpressions.Regex]::Match($(LunaPanelChangelogText), '## (ver-\S+)').Groups[1].Value)</LunaPanelVersion>
-    <LunaPanelVersionNumeric>$([System.Text.RegularExpressions.Regex]::Match($(LunaPanelVersion), '^ver-(\d+\.\d+\.\d+\.\d+)').Groups[1].Value)</LunaPanelVersionNumeric>
-    <AssemblyVersion>$(LunaPanelVersionNumeric)</AssemblyVersion>
-    <FileVersion>$(LunaPanelVersionNumeric)</FileVersion>
-  </PropertyGroup>
-  <ItemGroup>
-    <AssemblyAttribute Include="System.Reflection.AssemblyInformationalVersionAttribute">
-      <_Parameter1>$(LunaPanelVersion)</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
 
 </Project>

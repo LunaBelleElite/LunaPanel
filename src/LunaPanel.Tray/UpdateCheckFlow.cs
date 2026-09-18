@@ -169,8 +169,15 @@ internal sealed class UpdateCheckFlow
     {
         try
         {
+            // /l*v logs the full verbose install to a file alongside the
+            // downloaded MSI, in the same temp folder DownloadAsync already
+            // uses - added 2026-09-18 so a future self-update problem has a
+            // real installer log to read instead of reasoning from symptoms
+            // alone, as the 2026-09-18 FileVersion incident had to. Purely
+            // additive: /passive /norestart are unchanged.
+            var logPath = Path.ChangeExtension(installerPath, ".log");
             _log.Info(LogCategory, "Starting the update install", installerPath);
-            Process.Start(new ProcessStartInfo("msiexec.exe", $"/i \"{installerPath}\" /passive /norestart")
+            Process.Start(new ProcessStartInfo("msiexec.exe", $"/i \"{installerPath}\" /passive /norestart /l*v \"{logPath}\"")
             {
                 UseShellExecute = true,
             });

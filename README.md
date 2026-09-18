@@ -160,9 +160,8 @@ built alongside **Astrid**, an AI personality.
 ## Getting started
 
 1. Run LunaPanel on your PC. The first time, before the tray icon even shows
-   up, it checks whether it found Elite Dangerous on its own. If it didn't,
-   you can point it at the right folder there and then, or just tell it
-   you'll deal with it later - either way you're not left guessing. After
+   up, it checks whether it found Elite Dangerous on its own - point it at
+   the right folder yourself, or tell it you'll deal with that later. After
    that it sits in the system tray, next to the clock.
 2. Right-click the tray icon and choose **Add a device**. A window shows a
    six-digit code and the address to open.
