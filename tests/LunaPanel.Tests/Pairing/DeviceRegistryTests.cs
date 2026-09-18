@@ -313,6 +313,33 @@ public class DeviceRegistryTests
     }
 
     [Fact]
+    public void PairingWindowExpiresAt_NullBeforeAnyWindowIsExplicitlyOpened_OnceADeviceIsRegistered()
+    {
+        var path = NewStatePath();
+        var registry = NewRegistry(path, new CapturingDiagnosticLog());
+        Assert.True(registry.TryPair(registry.CurrentCode, "Tablet", "tablet", out _, out _));
+
+        // A fresh instance over the SAME state file - simulating a restart -
+        // must NOT auto-open (see IsPairingWindowOpen_FalseOnReload_...
+        // above), so PairingWindowExpiresAt must be null too, not just
+        // IsPairingWindowOpen false.
+        var reloaded = NewRegistry(path, new CapturingDiagnosticLog());
+
+        Assert.Null(reloaded.PairingWindowExpiresAt);
+    }
+
+    [Fact]
+    public void PairingWindowExpiresAt_EqualsClockPlusTwoMinutes_ImmediatelyAfterOpenPairingWindow()
+    {
+        var clock = new ManualTimeProvider { UtcNow = Epoch };
+        var registry = NewRegistry(NewStatePath(), new CapturingDiagnosticLog(), clock);
+
+        registry.OpenPairingWindow();
+
+        Assert.Equal(Epoch + TimeSpan.FromMinutes(2), registry.PairingWindowExpiresAt);
+    }
+
+    [Fact]
     public void IsPairingWindowOpen_FalseOnReload_OnceADeviceIsRegistered()
     {
         var path = NewStatePath();

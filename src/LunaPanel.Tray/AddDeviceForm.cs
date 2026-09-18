@@ -58,11 +58,41 @@ internal sealed class AddDeviceForm : Form
 
     private const string Instruction = "On the new device, open LunaPanel and enter this code:";
 
-    public AddDeviceForm(string groupedCode, string url)
+    /// <summary>
+    /// Shown once <see cref="_countdownTimer"/> observes <paramref name="expiresAt"/>
+    /// has passed. Purely visual - see this class's own remarks on the
+    /// countdown bar; nothing here re-checks or changes server-side pairing
+    /// state.
+    /// </summary>
+    private const string ExpiredCaption = "This code has expired — close and try again";
+
+    private readonly System.Windows.Forms.Timer _countdownTimer;
+    private readonly Panel _countdownBarBackground;
+    private readonly Panel _countdownBarFill;
+    private readonly Label _countdownLabel;
+    private readonly DateTimeOffset _expiresAt;
+    private readonly TimeSpan _totalSpan;
+
+    /// <summary>
+    /// <paramref name="expiresAt"/> is the instant
+    /// <see cref="LunaPanel.Core.Pairing.DeviceRegistry"/>'s own pairing
+    /// window closes - read once here, at construction, and the span
+    /// between it and "now" at that moment is captured as the countdown
+    /// bar's 100% (see <see cref="_totalSpan"/>). This form is always
+    /// constructed immediately after
+    /// <see cref="LunaPanel.Core.Pairing.DeviceRegistry.OpenPairingWindow"/>
+    /// returns, so that captured span is, for all practical purposes, the
+    /// full two-minute window, without this form needing to know
+    /// <c>DeviceRegistry</c>'s own duration constant. Purely a client-side
+    /// visual: the server-side <c>IsPairingWindowOpen</c> check already
+    /// refuses an expired code on its own, and this form never auto-closes
+    /// or auto-regenerates a code once the bar empties.
+    /// </summary>
+    public AddDeviceForm(string groupedCode, string url, DateTimeOffset expiresAt)
     {
         Text = "Add a device";
         Width = 400;
-        Height = 316;
+        Height = 356;
         StartPosition = FormStartPosition.CenterScreen;
         MinimizeBox = false;
         MaximizeBox = false;
@@ -139,7 +169,65 @@ internal sealed class AddDeviceForm : Form
         };
         urlPanel.Controls.Add(urlBox);
 
+        // The countdown bar - positioned below the code box, above the URL.
+        // A plain custom-drawn Panel-on-Panel rather than a native
+        // ProgressBar, matching this form's existing "no native control that
+        // can't be recoloured to match TrayTheme" preference (see this
+        // class's own remarks on why the dark-title-bar P/Invoke is
+        // duplicated locally rather than shared, for the same "small enough
+        // to just do it here" reasoning). _countdownBarFill's Width is the
+        // only thing UpdateCountdown mutates on every tick.
+        _countdownBarBackground = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 6,
+            BackColor = ColorTranslator.FromHtml(TrayTheme.Border),
+        };
+        _countdownBarFill = new Panel
+        {
+            Location = new Point(0, 0),
+            Height = 6,
+            Width = 0,
+            BackColor = ColorTranslator.FromHtml(TrayTheme.PrimaryButtonFill),
+        };
+        _countdownBarBackground.Controls.Add(_countdownBarFill);
+
+        _countdownLabel = new Label
+        {
+            Dock = DockStyle.Bottom,
+            Height = 24,
+            AutoSize = false,
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = ColorTranslator.FromHtml(TrayTheme.LabelText),
+            Font = new Font("Segoe UI", 9F),
+        };
+
+        var countdownPanel = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 40,
+            BackColor = background,
+            Padding = new Padding(24, 6, 24, 0),
+        };
+        // Added in this order (label, then bar) deliberately - within this
+        // sub-panel the same "last added docks first" rule this form's own
+        // outer Controls.Add already relies on applies again: the label
+        // (Dock=Bottom) is added last so it claims the panel's bottom edge,
+        // leaving the bar (Dock=Top) the remaining space above it.
+        countdownPanel.Controls.Add(_countdownBarBackground);
+        countdownPanel.Controls.Add(_countdownLabel);
+
+        _expiresAt = expiresAt;
+        var initialSpan = expiresAt - DateTimeOffset.UtcNow;
+        _totalSpan = initialSpan > TimeSpan.Zero ? initialSpan : TimeSpan.FromSeconds(1);
+
+        _countdownTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        _countdownTimer.Tick += (_, _) => UpdateCountdown();
+        _countdownTimer.Start();
+        Load += (_, _) => UpdateCountdown();
+
         Controls.Add(codeBox);
+        Controls.Add(countdownPanel);
         Controls.Add(urlPanel);
         Controls.Add(label);
 
@@ -173,6 +261,31 @@ internal sealed class AddDeviceForm : Form
     }
 
     /// <summary>
+    /// Recomputes the countdown bar's fill width and caption text against
+    /// <see cref="_expiresAt"/> and "now". Stops <see cref="_countdownTimer"/>
+    /// once the window has expired - the caption then reads
+    /// <see cref="ExpiredCaption"/> and the bar sits empty, but the form
+    /// itself is left open; it never auto-closes or auto-regenerates a code
+    /// (see this class's own remarks on why).
+    /// </summary>
+    private void UpdateCountdown()
+    {
+        var remaining = _expiresAt - DateTimeOffset.UtcNow;
+
+        if (remaining <= TimeSpan.Zero)
+        {
+            _countdownTimer.Stop();
+            _countdownBarFill.Width = 0;
+            _countdownLabel.Text = ExpiredCaption;
+            return;
+        }
+
+        var fraction = Math.Clamp(remaining / _totalSpan, 0.0, 1.0);
+        _countdownBarFill.Width = (int)(_countdownBarBackground.ClientSize.Width * fraction);
+        _countdownLabel.Text = $"Expires in {(int)remaining.TotalMinutes}:{remaining.Seconds:D2}";
+    }
+
+    /// <summary>
     /// <c>DWMWA_USE_IMMERSIVE_DARK_MODE</c> (attribute 20) and
     /// <c>DWMWA_WINDOW_CORNER_PREFERENCE</c> (attribute 33, requesting
     /// <c>DWMWCP_ROUND</c>) - same calls as
@@ -195,5 +308,22 @@ internal sealed class AddDeviceForm : Form
         {
             // Best-effort only - see the doc comment above.
         }
+    }
+
+    /// <summary>
+    /// Stops and disposes <see cref="_countdownTimer"/> alongside the rest
+    /// of the form - a running <see cref="System.Windows.Forms.Timer"/> left
+    /// ticking against a disposed form is the standard WinForms trap this
+    /// avoids.
+    /// </summary>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _countdownTimer.Stop();
+            _countdownTimer.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }

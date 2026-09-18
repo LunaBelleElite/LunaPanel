@@ -154,4 +154,95 @@ public class PanelSettingsStoreTests
         Assert.False(result.MergeExpand);
         Assert.True(result.ShowMacroStepResults);
     }
+
+    [Fact]
+    public void Default_AutoSwitchEnabled_IsTrue()
+    {
+        Assert.True(PanelSettings.Default.AutoSwitchEnabled);
+    }
+
+    [Fact]
+    public void Load_NoFileForDevice_ReturnsDefault_AutoSwitchEnabledOn()
+    {
+        var store = new PanelSettingsStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        var result = store.Load("device-a");
+
+        Assert.True(result.AutoSwitchEnabled);
+    }
+
+    [Fact]
+    public void Save_AutoSwitchEnabledFalse_ThenLoad_RoundTrips()
+    {
+        var store = new PanelSettingsStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        store.Save("device-a", new PanelSettings(MergeExpand: true, ShowMacroStepResults: true, AutoSwitchEnabled: false));
+        var result = store.Load("device-a");
+
+        Assert.False(result.AutoSwitchEnabled);
+    }
+
+    [Fact]
+    public void Save_AutoSwitchEnabledTrue_ThenLoad_RoundTrips()
+    {
+        var store = new PanelSettingsStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        store.Save("device-a", new PanelSettings(MergeExpand: true, ShowMacroStepResults: true, AutoSwitchEnabled: true));
+        var result = store.Load("device-a");
+
+        Assert.True(result.AutoSwitchEnabled);
+    }
+
+    // Independence from the other two fields: flipping AutoSwitchEnabled
+    // does not disturb MergeExpand/ShowMacroStepResults, and vice versa -
+    // the three are separate JSON keys, not a packed bitfield.
+    [Fact]
+    public void Save_AutoSwitchEnabledFalse_DoesNotDisturbOtherFields()
+    {
+        var store = new PanelSettingsStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        store.Save("device-a", new PanelSettings(MergeExpand: false, ShowMacroStepResults: true, AutoSwitchEnabled: false));
+        var result = store.Load("device-a");
+
+        Assert.False(result.MergeExpand);
+        Assert.True(result.ShowMacroStepResults);
+        Assert.False(result.AutoSwitchEnabled);
+    }
+
+    [Fact]
+    public void Load_CorruptFile_FallsBackToDefault_AutoSwitchEnabledOn()
+    {
+        var dir = NewTempDir();
+        var mainPath = Path.Combine(dir, "panel-settings-device-a.json");
+        File.WriteAllText(mainPath, "{ not valid json");
+        var store = new PanelSettingsStore(dir, new CapturingDiagnosticLog());
+
+        var result = store.Load("device-a");
+
+        Assert.True(result.AutoSwitchEnabled);
+    }
+
+    /// <summary>
+    /// A settings file saved before this field existed - no
+    /// <c>autoSwitchEnabled</c> key at all - must still load with the new
+    /// field defaulting to <see langword="true"/>, matching
+    /// <see cref="PanelSettings.Default"/> exactly, deliberately NOT copied
+    /// from <c>ShowMacroStepResults</c>'s own old-file-defaults-to-true
+    /// quirk above (which predates this field and doesn't match
+    /// <see cref="PanelSettings.Default"/> either).
+    /// </summary>
+    [Fact]
+    public void Load_OldFileWithNoAutoSwitchEnabledKey_DefaultsThatFieldToTrue()
+    {
+        var dir = NewTempDir();
+        var mainPath = Path.Combine(dir, "panel-settings-device-a.json");
+        File.WriteAllText(mainPath, "{\"mergeExpand\":false,\"showMacroStepResults\":false}");
+        var store = new PanelSettingsStore(dir, new CapturingDiagnosticLog());
+
+        var result = store.Load("device-a");
+
+        Assert.False(result.MergeExpand);
+        Assert.False(result.ShowMacroStepResults);
+        Assert.True(result.AutoSwitchEnabled);
+    }
 }

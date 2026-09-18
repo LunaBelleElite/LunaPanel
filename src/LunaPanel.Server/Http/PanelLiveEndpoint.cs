@@ -96,6 +96,21 @@ public static class PanelLiveEndpoint
     /// instead, keyed by <see cref="MacroFinishedDto.MacroId"/> because the
     /// runner already guarantees at most one run per id.
     /// </param>
+    /// <param name="ThemeChanged">
+    /// <see langword="true"/> on the one push caused by
+    /// <c>Theme.ThemeFileWatcher.Changed</c> - a colour edit made to the EDHM
+    /// theme this server currently reads through - and <see langword="null"/>
+    /// on every other push, exactly the same edge convention as
+    /// <see cref="BindingsChanged"/> and <see cref="LayoutChanged"/>. A
+    /// distinct field rather than reusing <see cref="BindingsChanged"/>: the
+    /// two signals are semantically unrelated (a rebind and a HUD colour
+    /// change are different commander actions with different re-fetch
+    /// targets), so a client that only cares about one should not have to
+    /// reason about the other. Deliberately carries no theme content of its
+    /// own - see <see cref="Theme.ThemeFileWatcher"/>'s own remarks for why
+    /// threading theme content into this payload instead would only
+    /// duplicate <c>GET /api/panel</c>/<c>GET /api/theme</c> for no gain.
+    /// </param>
     public sealed record LiveState(
         bool GameRunning,
         IReadOnlyList<SlotLitDto> Slots,
@@ -103,7 +118,8 @@ public static class PanelLiveEndpoint
         TimingDto? Timing = null,
         bool? BindingsChanged = null,
         bool? LayoutChanged = null,
-        MacroFinishedDto? MacroFinished = null);
+        MacroFinishedDto? MacroFinished = null,
+        bool? ThemeChanged = null);
 
     /// <summary>
     /// One finished macro run, as the live channel carries it. Every field
@@ -296,6 +312,14 @@ public static class PanelLiveEndpoint
     /// runner has already removed its id and the dark push has gone out, so
     /// the finished push's slots are byte-for-byte the last ones sent. Every
     /// outcome, without exception, would be dropped.</para>
+    ///
+    /// <para><b>A push carrying a theme-changed signal is never deduped
+    /// either</b>, for the same reason as bindings: an EDHM colour edit
+    /// changes nothing about how any button's LIT state looks (lit state is
+    /// driven by the game snapshot and the layout, not by colour), so
+    /// <see cref="StatesEqual"/> would find the two states identical and
+    /// silently drop the one push this whole mechanism exists to
+    /// deliver.</para>
     /// </summary>
     public static bool ShouldPush(LiveState candidate, LiveState lastSent)
     {
@@ -307,6 +331,7 @@ public static class PanelLiveEndpoint
             || candidate.BindingsChanged is not null
             || candidate.LayoutChanged is not null
             || candidate.MacroFinished is not null
+            || candidate.ThemeChanged is not null
             || !StatesEqual(candidate, lastSent);
     }
 }

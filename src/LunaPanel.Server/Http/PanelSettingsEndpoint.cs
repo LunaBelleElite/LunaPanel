@@ -10,9 +10,9 @@ namespace LunaPanel.Server.Http;
 /// </summary>
 public static class PanelSettingsEndpoint
 {
-    public sealed record Request(bool MergeExpand, bool ShowMacroStepResults);
+    public sealed record Request(bool MergeExpand, bool ShowMacroStepResults, bool AutoSwitchEnabled = true);
 
-    public sealed record Response(bool MergeExpand, bool ShowMacroStepResults);
+    public sealed record Response(bool MergeExpand, bool ShowMacroStepResults, bool AutoSwitchEnabled);
 
-    public static Response BuildResponse(PanelSettings settings) => new(settings.MergeExpand, settings.ShowMacroStepResults);
+    public static Response BuildResponse(PanelSettings settings) => new(settings.MergeExpand, settings.ShowMacroStepResults, settings.AutoSwitchEnabled);
 }

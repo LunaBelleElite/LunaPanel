@@ -35,6 +35,15 @@ namespace LunaPanel.Server.Discovery;
 /// <see cref="GraphicsConfigurationOverridePath"/>, so every existing caller
 /// that builds this record without it keeps compiling.
 /// </param>
+/// <param name="IsDevBuild">
+/// From <see cref="DevBuildDetector.IsDevBuild"/> - whether this running
+/// copy of LunaPanel is a dev build, the one signal
+/// <see cref="LunaPanelDirectories.Resolve"/> uses to root under
+/// <c>LunaPanel-Dev</c> instead of <c>LunaPanel</c>. Deliberately no
+/// default: a silently-wrong default here (always <see langword="false"/>)
+/// is exactly the kind of dev/real collision this field exists to prevent,
+/// so every caller must state the choice explicitly.
+/// </param>
 /// <param name="EliteInstallPathOverride">
 /// A commander-chosen install root (<c>PathOverrideStore</c>, set via the
 /// Tray app's About window), used in place of the Steam/Epic/Frontier sweep
@@ -53,6 +62,7 @@ public sealed record PathDiscoveryEnvironment(
     string EdhmSettingsJsonPath,
     IReadOnlyDictionary<string, string> EnvironmentVariables,
     string LocalAppData,
+    bool IsDevBuild,
     string? GraphicsConfigurationOverridePath = null,
     string? StatusJsonDirectory = null,
     string? EliteInstallPathOverride = null);
@@ -132,7 +142,7 @@ public static class PathDiscoveryService
 
         var edhm = EdhmDiscovery.Discover(environment.EdhmSettingsJsonPath, environment.EnvironmentVariables, log);
 
-        var layout = LunaPanelDirectories.Resolve(environment.LocalAppData);
+        var layout = LunaPanelDirectories.Resolve(environment.LocalAppData, environment.IsDevBuild);
         LunaPanelDirectories.EnsureCreated(layout, log);
 
         var statusJson = StatusJsonDiscovery.Discover(environment.StatusJsonDirectory, log);

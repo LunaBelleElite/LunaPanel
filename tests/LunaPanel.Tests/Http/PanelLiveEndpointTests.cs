@@ -580,4 +580,73 @@ public class PanelLiveEndpointTests
         Assert.Equal(new PanelLiveEndpoint.MacroStepDto(0, "press", "Succeeded", 150), dto.Steps[0]);
         Assert.Equal(new PanelLiveEndpoint.MacroStepDto(1, "press", "Failed", 0.5), dto.Steps[1]);
     }
+
+    // ------------------------------------------------------------------
+    // ThemeChanged - an EDHM colour edit reaching an already-open device
+    // (ThemeFileWatcher). The same EDGE shape BindingsChanged/LayoutChanged
+    // above have, for the same reason: it describes the one push it caused,
+    // never a standing level, so it must survive the lit-state dedupe
+    // without weakening it.
+    // ------------------------------------------------------------------
+
+    private static PanelLiveEndpoint.LiveState ThemeState(bool? themeChanged) =>
+        new(true, new List<PanelLiveEndpoint.SlotLitDto> { new(0, "Full") }, ThemeChanged: themeChanged);
+
+    /// <summary>
+    /// Not a level. A build caused by anything other than a theme-file
+    /// change carries no signal at all, so a client can treat its presence
+    /// as "this just changed" rather than having to compare it with what it
+    /// already had.
+    /// </summary>
+    [Fact]
+    public void BuildState_OrdinaryBuild_CarriesNoThemeChanged()
+    {
+        var layout = new Layout(1, new[]
+        {
+            new LayoutPage("SHIP", "t6", new[] { new LayoutSlot(0, "LandingGearToggle", null, null, null) }, Array.Empty<LayoutSlot>())
+        });
+
+        var result = PanelLiveEndpoint.BuildState(layout, 0, Catalogue, null);
+
+        Assert.Equal(PanelLiveEndpoint.BuildOutcome.Ok, result.Outcome);
+        Assert.Null(result.State!.ThemeChanged);
+    }
+
+    /// <summary>
+    /// The whole point. An EDHM colour edit very often changes nothing about
+    /// how any button's LIT state looks (lit state is driven by the game
+    /// snapshot and layout, not by colour), so the lit-state comparison finds
+    /// the two states identical - running this push through it alone would
+    /// drop the one push this whole mechanism exists to deliver.
+    /// </summary>
+    [Fact]
+    public void ShouldPush_LitStateIdentical_ButCarryingAThemeChangedSignal_IsTrue()
+    {
+        Assert.True(PanelLiveEndpoint.ShouldPush(ThemeState(true), ThemeState(null)));
+    }
+
+    /// <summary>
+    /// The dedupe is not weakened by adding a field to it: a signal left on
+    /// the last-sent state must not make every later push look different, or
+    /// LC6's ~11.8s idle heartbeat floods the channel again.
+    /// </summary>
+    [Fact]
+    public void ShouldPush_LastSentCarriedAThemeChangedSignal_ButNothingHasChangedSince_IsFalse()
+    {
+        Assert.False(PanelLiveEndpoint.ShouldPush(ThemeState(null), ThemeState(true)));
+    }
+
+    /// <summary>
+    /// <see cref="PanelLiveEndpoint.StatesEqual"/> answers "does any button
+    /// look different", and a theme-changed signal is not a button - so it
+    /// stays out of that comparison, exactly as <c>BindingsChanged</c>/
+    /// <c>LayoutChanged</c> do. This is what makes the dedupe test above mean
+    /// what it says rather than passing because the comparison happens to
+    /// include the field.
+    /// </summary>
+    [Fact]
+    public void StatesEqual_DiffersOnlyByThemeChanged_IsStillEqual()
+    {
+        Assert.True(PanelLiveEndpoint.StatesEqual(ThemeState(true), ThemeState(null)));
+    }
 }

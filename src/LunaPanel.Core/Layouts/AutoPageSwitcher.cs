@@ -28,6 +28,8 @@ namespace LunaPanel.Core.Layouts;
 /// </summary>
 public sealed class AutoPageSwitcher
 {
+    private const string LogCategory = "Layout";
+
     private readonly object _gate = new();
     private VesselContext _lastContext;
 
@@ -87,11 +89,24 @@ public sealed class AutoPageSwitcher
         }
 
         var target = ContextPageSelector.Select(layout, snapshot, observed, log);
-        if (target is null || target == currentPageIndex)
+        if (target is null)
+        {
+            // Only reached after a REAL context change (the far more common
+            // "nothing changed" case already returned above, silently, by
+            // design - logging every unchanged tick would flood this
+            // category). A context change with nothing to switch to is rare
+            // and genuinely worth a line: 2026-09-19, a commander asked "why
+            // didn't it switch" with nothing in the log to answer from.
+            log.Info(LogCategory, $"Vessel context changed to {observed}, but no page matches - staying put.");
+            return null;
+        }
+
+        if (target == currentPageIndex)
         {
             return null;
         }
 
+        log.Info(LogCategory, $"Vessel context changed to {observed} - switching to page {target}.");
         return target;
     }
 }

@@ -1,5 +1,7 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Something else / a question
-    url: https://github.com/LunaBelleElite/LunaPanel/discussions
-    about: Not quite a bug or a feature idea? Start a discussion instead.
+# Was a link to GitHub Discussions here - dropped 2026-09-18. The user
+# decided a Discord server (queued, not built yet - see memory
+# project_pending_discord_server.md) is the better "something else"
+# destination than Discussions. Add the real invite link here once that
+# server exists, rather than leaving a Discussions link nobody confirmed
+# was even enabled.

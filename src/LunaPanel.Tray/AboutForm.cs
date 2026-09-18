@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using LunaPanel.Core.Discovery;
+using LunaPanel.Core.Tray;
 using LunaPanel.Server.Discovery;
 using LunaPanel.Server.Tray;
 
@@ -34,8 +35,8 @@ namespace LunaPanel.Tray;
 /// deliberately does not touch <c>EdhmDiscovery</c> to add one. The path
 /// shown here is therefore recomputed the same way
 /// <c>RealServerEnvironment.Build()</c> computes it: the saved override if
-/// one exists, otherwise the same fixed conventional location. Whether it
-/// was actually found is still <see cref="EdhmDiscoveryResult.SettingsFound"/>
+/// one exists, otherwise the same fixed conventional location. Whether a
+/// theme was actually found is still <see cref="EdhmDiscoveryResult.HasResolvableTheme"/>
 /// from <paramref name="discovery"/>, not re-derived here.
 /// </summary>
 internal sealed class AboutForm : Form
@@ -50,18 +51,24 @@ internal sealed class AboutForm : Form
     private readonly PathDiscoveryResult _discovery;
     private readonly LunaPanelDirectoryLayout _layout;
     private readonly PathOverrideStore _overrides;
+    private readonly TrayBehaviorStore _trayBehavior;
     private readonly Action _quit;
+    private readonly Action _showStatusWindow;
 
     public AboutForm(
         PathDiscoveryResult discovery,
         LunaPanelDirectoryLayout layout,
         PathOverrideStore overrides,
-        Action quit)
+        TrayBehaviorStore trayBehavior,
+        Action quit,
+        Action showStatusWindow)
     {
         _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
+        _trayBehavior = trayBehavior ?? throw new ArgumentNullException(nameof(trayBehavior));
         _quit = quit ?? throw new ArgumentNullException(nameof(quit));
+        _showStatusWindow = showStatusWindow ?? throw new ArgumentNullException(nameof(showStatusWindow));
 
         var background = ColorTranslator.FromHtml(TrayTheme.Background);
         var primaryText = ColorTranslator.FromHtml(TrayTheme.PrimaryText);
@@ -132,6 +139,7 @@ internal sealed class AboutForm : Form
             actionButtonSize,
             tooltips,
             (_, _) => OnSelectEdhmSettingsFile()));
+        content.Controls.Add(BuildMinimizeToTrayCheckbox(primaryText, tooltips));
 
         var closeButton = new RoundedButton
         {
@@ -207,6 +215,53 @@ internal sealed class AboutForm : Form
         row.Controls.Add(label);
         row.Controls.Add(value);
         return row;
+    }
+
+    /// <summary>
+    /// "Closing the window minimizes to the system tray instead of exiting" -
+    /// a live-effect setting, unlike the
+    /// Elite/EDHM path rows above: saving it applies immediately, with no
+    /// <see cref="OfferRestart"/> flow, because <c>TrayCloseDecision</c> and
+    /// <c>TrayApplicationContext</c>'s startup check both read
+    /// <see cref="TrayBehaviorStore.Load"/> fresh rather than a value cached
+    /// at process start.
+    ///
+    /// Unchecking it while the Status window is currently hidden (tray-only)
+    /// calls <see cref="_showStatusWindow"/> right away too, so "LunaPanel
+    /// always shows a window on the taskbar" becomes true immediately rather
+    /// than only after the app is next restarted or Status is next manually
+    /// opened. <c>TrayApplicationContext.ShowStatusWindow</c> already no-ops
+    /// safely (just re-shows/activates) if the window happens to be visible
+    /// already, so this is safe to call unconditionally on every uncheck.
+    /// Re-checking it needs no equivalent action - the existing pattern's own
+    /// precedent (see <see cref="OnSelectEdhmSettingsFile"/> et al.) is to do
+    /// no more than asked, and the next close already hides the window as
+    /// normal.
+    /// </summary>
+    private Control BuildMinimizeToTrayCheckbox(Color primaryText, ToolTip tooltips)
+    {
+        var checkbox = new CheckBox
+        {
+            AutoSize = true,
+            ForeColor = primaryText,
+            Text = "Closing the window minimizes to the system tray instead of exiting",
+            Checked = _trayBehavior.Load().MinimizeToTrayEnabled,
+            Margin = new Padding(0, 0, 0, 12),
+        };
+        tooltips.SetToolTip(
+            checkbox,
+            "On (default): clicking Close on this window doesn't exit LunaPanel - it hides back to the tray. Off: LunaPanel always shows a window on the taskbar, and closing it exits the program for real.");
+
+        checkbox.CheckedChanged += (_, _) =>
+        {
+            _trayBehavior.Save(new TrayBehaviorSettings(checkbox.Checked));
+            if (!checkbox.Checked)
+            {
+                _showStatusWindow();
+            }
+        };
+
+        return checkbox;
     }
 
     /// <summary>
@@ -339,7 +394,7 @@ internal sealed class AboutForm : Form
         return Path.Combine(localAppData, "EDHM-UI-V3", "resources", "data", "Settings.json");
     }
 
-    private string CurrentEdhmLabel() => _discovery.Edhm.SettingsFound ? CurrentEdhmSettingsPath() : "Not found";
+    private string CurrentEdhmLabel() => _discovery.Edhm.HasResolvableTheme ? CurrentEdhmSettingsPath() : "Not found";
 
     private void OpenLogsFolder()
     {
@@ -363,15 +418,35 @@ internal sealed class AboutForm : Form
 
         using var dialog = new FolderBrowserDialog
         {
-            Description = "Select the folder containing Elite Dangerous' \"Products\" folder.",
+            Description = EliteInstallPathValidator.FolderPickerDescription,
         };
-        if (current.EliteInstallPath is not null && Directory.Exists(current.EliteInstallPath))
+        // A saved override is already a validated root (only ever saved
+        // after passing IsValidEliteInstallRoot) - use it directly. With no
+        // override yet, fall back to whatever auto-detection already found,
+        // converted from its ProductPath (two levels too deep) to the actual
+        // "Elite Dangerous" folder - opening the browser three folders too
+        // deep, at Products or a specific product, was the exact mistake
+        // reported live tonight.
+        var discoveredProductPath = _discovery.EliteInstallations.FirstOrDefault()?.ProductPath;
+        var defaultPath = current.EliteInstallPath
+            ?? (discoveredProductPath is not null ? EliteInstallPathValidator.InstallRootFromProductPath(discoveredProductPath) : null);
+        if (defaultPath is not null && Directory.Exists(defaultPath))
         {
-            dialog.SelectedPath = current.EliteInstallPath;
+            dialog.SelectedPath = defaultPath;
         }
 
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
+            return;
+        }
+
+        if (!EliteInstallPathValidator.IsValidEliteInstallRoot(dialog.SelectedPath))
+        {
+            MessageBox.Show(
+                EliteInstallPathValidator.InvalidSelectionMessage,
+                "LunaPanel",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
             return;
         }
 

@@ -98,6 +98,21 @@ public sealed class DeviceRegistry
         get { lock (_gate) { return IsPairingWindowOpenNoLock(); } }
     }
 
+    /// <summary>
+    /// The instant the currently-open pairing window stops accepting new
+    /// pairings, or <c>null</c> when pairing is closed. Exposed so a caller
+    /// (the tray's <c>AddDeviceForm</c>) can show how much of the window is
+    /// left, without exposing <see cref="PairingWindowDuration"/> itself -
+    /// this timestamp is the only fact the UI actually needs. Deliberately
+    /// not gated on <see cref="IsPairingWindowOpen"/>: it returns the raw
+    /// timestamp as stored, already-passed or not, the same way
+    /// <see cref="_pairingWindowExpiresAt"/> itself behaves.
+    /// </summary>
+    public DateTimeOffset? PairingWindowExpiresAt
+    {
+        get { lock (_gate) { return _pairingWindowExpiresAt; } }
+    }
+
     private bool IsPairingWindowOpenNoLock() =>
         _pairingWindowExpiresAt is { } expiresAt && _clock.GetUtcNow() < expiresAt;
 

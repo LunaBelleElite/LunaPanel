@@ -1,6 +1,8 @@
 using System.Windows.Forms;
 using LunaPanel.Core.Diagnostics;
+using LunaPanel.Core.Discovery;
 using LunaPanel.Core.Network;
+using LunaPanel.Server.Discovery;
 using LunaPanel.Server.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +30,38 @@ internal static class Program
 
         var options = RealServerEnvironment.Build();
         var app = ServerHostBuilder.Build(Array.Empty<string>(), options);
+
+        // One-time first-launch check: before the host ever starts
+        // listening, confirm Elite Dangerous was actually found and let the
+        // commander fix it right then if not - see EliteSetupForm's own
+        // remarks on why this exists alongside AboutForm's identical, but
+        // easy-to-miss, opt-in check. Gated on
+        // PathOverrideSettings.EliteSetupAcknowledged so this never shows
+        // again once a commander has been through it once, either way.
+        var pathOverrides = app.Services.GetRequiredService<PathOverrideStore>();
+        if (!pathOverrides.Load().EliteSetupAcknowledged)
+        {
+            var discovery = app.Services.GetRequiredService<PathDiscoveryResult>();
+            using var setupForm = new EliteSetupForm(discovery, pathOverrides);
+            setupForm.ShowDialog();
+
+            // The override may have changed (a manual pick, or just the
+            // acknowledged flag) - dispose and rebuild fresh so THIS SAME
+            // launch honors it, no restart needed. Same dispose-and-rebuild
+            // shape as RestartAgainstDefaultPort below, just run
+            // unconditionally here rather than only on a failed start.
+            //
+            // Re-running RealServerEnvironment.Build() (not just reusing
+            // `options`) matters: it is what actually reads
+            // PathOverrideStore.Load().EliteInstallPath back into
+            // PathDiscoveryEnvironment.EliteInstallPathOverride - the stale
+            // `options` from before this dialog ran would still carry
+            // whatever override (or lack of one) existed before a manual
+            // pick was saved just now.
+            app.DisposeAsync().GetAwaiter().GetResult();
+            options = RealServerEnvironment.Build();
+            app = ServerHostBuilder.Build(Array.Empty<string>(), options);
+        }
 
         // Started before Application.Run begins the WinForms message loop -
         // there is no UI SynchronizationContext yet for this blocking wait

@@ -23,12 +23,16 @@ public enum WindowCloseTrigger
 /// (<c>ref/docs/pairing-and-devices.md</c>'s "What this means for the
 /// tray"; the user's own framing: "the ability to put the program in the
 /// background and not take up a taskbar slot") - but only when the user
-/// closed it themselves. When the app is actually exiting (the Quit menu
-/// action, or Windows shutting down), the window must be allowed to close
-/// for real, or the process could never exit.
+/// closed it themselves, AND the commander has left "Minimize to system
+/// tray" turned on (<c>AboutForm</c>'s checkbox,
+/// <c>LunaPanel.Core.Tray.TrayBehaviorSettings</c>, default on). When the
+/// app is actually exiting (the Quit menu action, or Windows shutting
+/// down), the window must be allowed to close for real, or the process
+/// could never exit - regardless of the setting, since it only governs
+/// what a user's own close click does.
 /// </summary>
 public static class TrayCloseDecision
 {
-    public static bool ShouldMinimizeInsteadOfClosing(WindowCloseTrigger trigger) =>
-        trigger == WindowCloseTrigger.UserClickedClose;
+    public static bool ShouldMinimizeInsteadOfClosing(WindowCloseTrigger trigger, bool minimizeToTrayEnabled) =>
+        trigger == WindowCloseTrigger.UserClickedClose && minimizeToTrayEnabled;
 }

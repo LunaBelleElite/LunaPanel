@@ -36,6 +36,16 @@ public class PathOverrideStoreTests
     }
 
     [Fact]
+    public void Load_NoFileYet_EliteSetupAcknowledgedDefaultsFalse()
+    {
+        var store = new PathOverrideStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        var result = store.Load();
+
+        Assert.False(result.EliteSetupAcknowledged);
+    }
+
+    [Fact]
     public void Load_CorruptFile_FallsBackToBothNull_RatherThanThrowing()
     {
         var dir = NewTempDir();
@@ -48,6 +58,56 @@ public class PathOverrideStoreTests
         Assert.Null(result.EliteInstallPath);
         Assert.Null(result.EdhmSettingsJsonPath);
         Assert.Contains(log.Events, e => e.Message.Contains("corrupt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Load_CorruptFile_EliteSetupAcknowledgedFallsBackToFalse_RatherThanThrowing()
+    {
+        var dir = NewTempDir();
+        File.WriteAllText(Path.Combine(dir, "path-overrides.json"), "{ not valid json");
+        var store = new PathOverrideStore(dir, new CapturingDiagnosticLog());
+
+        var result = store.Load();
+
+        Assert.False(result.EliteSetupAcknowledged);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_EliteSetupAcknowledgedRoundTrips_IndependentlyOfPaths()
+    {
+        var store = new PathOverrideStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        store.Save(new PathOverrideSettings(null, null, EliteSetupAcknowledged: true));
+        var result = store.Load();
+
+        Assert.True(result.EliteSetupAcknowledged);
+        Assert.Null(result.EliteInstallPath);
+        Assert.Null(result.EdhmSettingsJsonPath);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_EliteSetupAcknowledgedFalse_RoundTrips()
+    {
+        var store = new PathOverrideStore(NewTempDir(), new CapturingDiagnosticLog());
+
+        store.Save(new PathOverrideSettings(@"C:\Games\Elite", null, EliteSetupAcknowledged: false));
+        var result = store.Load();
+
+        Assert.False(result.EliteSetupAcknowledged);
+        Assert.Equal(@"C:\Games\Elite", result.EliteInstallPath);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_EliteSetupAcknowledged_FromAFreshStoreInstance_SurvivesARestart()
+    {
+        var dir = NewTempDir();
+        new PathOverrideStore(dir, new CapturingDiagnosticLog())
+            .Save(new PathOverrideSettings(null, null, EliteSetupAcknowledged: true));
+
+        var reopened = new PathOverrideStore(dir, new CapturingDiagnosticLog());
+        var result = reopened.Load();
+
+        Assert.True(result.EliteSetupAcknowledged);
     }
 
     [Fact]

@@ -17,9 +17,20 @@ public sealed record LunaPanelDirectoryLayout(
 /// </summary>
 public static class LunaPanelDirectories
 {
-    public static LunaPanelDirectoryLayout Resolve(string localAppData)
+    /// <param name="isDevBuild">
+    /// From <see cref="DevBuildDetector.IsDevBuild"/> (or a
+    /// <see cref="PathDiscoveryEnvironment.IsDevBuild"/> already carrying that
+    /// value) - the ONE signal for which root to use. When
+    /// <see langword="true"/>, the root becomes <c>LunaPanel-Dev</c> instead
+    /// of <c>LunaPanel</c>, so a dev launch used to test changes never
+    /// collides with a real install's own Logs/Layouts/Pairing state.
+    /// <see langword="false"/> reproduces this method's behaviour from
+    /// before this parameter existed, byte-for-byte - the invariant a real
+    /// install's build must never regress.
+    /// </param>
+    public static LunaPanelDirectoryLayout Resolve(string localAppData, bool isDevBuild)
     {
-        var root = Path.Combine(localAppData, "LunaPanel");
+        var root = Path.Combine(localAppData, isDevBuild ? "LunaPanel-Dev" : "LunaPanel");
         return new LunaPanelDirectoryLayout(
             LogsDirectory: Path.Combine(root, "Logs"),
             LayoutsDirectory: Path.Combine(root, "Layouts"),

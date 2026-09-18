@@ -218,6 +218,77 @@ public class EdhmDiscoveryTests
         Assert.Equal("Steam (Odyssey (Live))", result.ActiveInstance);
     }
 
+    // -------------------------------------------------------------------
+    // HasResolvableTheme: distinct from SettingsFound, which only means the
+    // fixed install-time bootstrap Settings.json exists and parses - none of
+    // which guarantees a theme is actually resolvable from it. See this
+    // property's own remarks on EdhmDiscoveryResult.
+    // -------------------------------------------------------------------
+
+    [Fact]
+    public void HasResolvableTheme_SettingsFoundButNoEditions_IsFalse()
+    {
+        var result = new EdhmDiscoveryResult(true, "C:\\SomeFolder", null, Array.Empty<EdhmEditionData>());
+
+        Assert.False(result.HasResolvableTheme);
+    }
+
+    [Fact]
+    public void HasResolvableTheme_EditionPresentButBothPathsNull_IsFalse()
+    {
+        var editions = new[] { new EdhmEditionData("ODYSS", "C:\\SomeFolder\\ODYSS\\EDHM\\EDHM-Ini", null, null) };
+        var result = new EdhmDiscoveryResult(true, "C:\\SomeFolder", null, editions);
+
+        Assert.False(result.HasResolvableTheme);
+    }
+
+    [Fact]
+    public void HasResolvableTheme_EditionHasThemeSettingsJsonPath_IsTrue()
+    {
+        var editions = new[]
+        {
+            new EdhmEditionData("ODYSS", "C:\\SomeFolder\\ODYSS\\EDHM\\EDHM-Ini", "C:\\SomeFolder\\ODYSS\\EDHM\\EDHM-Ini\\ThemeSettings.json", null),
+        };
+        var result = new EdhmDiscoveryResult(true, "C:\\SomeFolder", null, editions);
+
+        Assert.True(result.HasResolvableTheme);
+    }
+
+    [Fact]
+    public void HasResolvableTheme_EditionHasOnlyXmlProfileIniPath_IsTrue()
+    {
+        var editions = new[]
+        {
+            new EdhmEditionData("ODYSS", "C:\\SomeFolder\\ODYSS\\EDHM\\EDHM-Ini", null, "C:\\SomeFolder\\ODYSS\\EDHM\\EDHM-Ini\\XML-Profile.ini"),
+        };
+        var result = new EdhmDiscoveryResult(true, "C:\\SomeFolder", null, editions);
+
+        Assert.True(result.HasResolvableTheme);
+    }
+
+    [Fact]
+    public void Discover_OnlyOdysseyFolderExistsWithNoThemeFilesInside_SettingsFoundTrueButNoResolvableTheme()
+    {
+        // Reproduces the reported defect: EDHM's bootstrap settings file is
+        // found and an edition folder exists, but neither theme file is
+        // actually present inside it - SettingsFound alone would say
+        // "Found" while nothing is actually resolvable.
+        using var temp = TempDirectory.Create();
+        var userDataFolder = temp.CreateSubdirectory("EDHM_UI");
+        temp.CreateSubdirectory("EDHM_UI/ODYSS/EDHM/EDHM-Ini");
+
+        temp.CreateFile(
+            "EDHM-UI-V3/resources/data/Settings.json",
+            $$"""{ "UserDataFolder": "{{userDataFolder.Replace(@"\", @"\\")}}" }""");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = EdhmDiscovery.Discover(
+            temp.Combine("EDHM-UI-V3", "resources", "data", "Settings.json"), NoEnvironmentVariables, log);
+
+        Assert.True(result.SettingsFound);
+        Assert.False(result.HasResolvableTheme);
+    }
+
     [Fact]
     public void Discover_SettingsPathIsAlreadyTheLiveOne_DoesNotReReadItself()
     {

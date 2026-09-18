@@ -108,6 +108,63 @@ public class AutoPageSwitcherTests
     }
 
     /// <summary>
+    /// 2026-09-19: a commander asked "why didn't it switch" with nothing in
+    /// the log to answer from - <see cref="Decide"/> had zero logging on its
+    /// normal path. This is the case that actually needed it: a REAL context
+    /// change happened, but nothing matched, which is indistinguishable from
+    /// "nothing happened at all" without this line.
+    /// </summary>
+    [Fact]
+    public void Decide_NoPageDeclaresTheNewContext_LogsThatNothingMatched()
+    {
+        var log = new CapturingDiagnosticLog();
+        var switcher = SeededIn(InShip);
+
+        switcher.Decide(ThreeContexts, currentPageIndex: 1, InSrv, "testbuggy", log);
+
+        var logged = Assert.Single(log.Events);
+        Assert.Equal(DiagnosticLevel.Info, logged.Level);
+        Assert.Equal("Layout", logged.Category);
+        Assert.Contains("no page matches", logged.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The success side of the same 2026-09-19 gap - a switch that DID
+    /// happen should also reach the log, for symmetry with the "nothing
+    /// matched" case above.
+    /// </summary>
+    [Fact]
+    public void Decide_AContextChangeThatSwitches_LogsIt()
+    {
+        var log = new CapturingDiagnosticLog();
+        var switcher = SeededIn(InShip);
+
+        switcher.Decide(ThreeContexts, currentPageIndex: 1, InSrv, "lander01", log);
+
+        var logged = Assert.Single(log.Events);
+        Assert.Equal(DiagnosticLevel.Info, logged.Level);
+        Assert.Equal("Layout", logged.Category);
+        Assert.Contains("switching to page", logged.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The far more common case (Status.json rewritten with nothing actually
+    /// changed, LC6) must stay silent - logging every unchanged tick would
+    /// flood this category. Confirms the new logging didn't accidentally
+    /// widen to cover this case too.
+    /// </summary>
+    [Fact]
+    public void Decide_TheSameContextArrivingAgain_LogsNothing()
+    {
+        var log = new CapturingDiagnosticLog();
+        var switcher = SeededIn(InShip);
+
+        switcher.Decide(ThreeContexts, currentPageIndex: 0, InShip, null, log);
+
+        Assert.Empty(log.Events);
+    }
+
+    /// <summary>
     /// A context change that produces no switch is still CONSUMED. Without
     /// this, a commander who moved ship -> Scarab (no page) -> ship would get
     /// a backdated switch on the way back that they never asked for, because

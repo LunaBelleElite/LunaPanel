@@ -28,8 +28,17 @@ namespace LunaPanel.Core.Layouts;
 /// response are unaffected either way. A commander who wants the per-step
 /// detail back can still turn it on from Settings.
 /// </param>
-public sealed record PanelSettings(bool MergeExpand, bool ShowMacroStepResults)
+/// <param name="AutoSwitchEnabled">
+/// <see langword="true"/> (the default): this device follows automatic
+/// vessel-context page switching as today (<c>ref/docs/vessel-context.md</c>).
+/// <see langword="false"/>: the gate at the <c>GET /api/panel/live</c> call
+/// site skips <c>AutoPageSwitcher.Decide</c> entirely for this device, so no
+/// automatic push ever arrives - manual page reachability via the tab row is
+/// completely unaffected either way. A commander running two devices at once
+/// can turn this off on one while the other keeps following context changes.
+/// </param>
+public sealed record PanelSettings(bool MergeExpand, bool ShowMacroStepResults, bool AutoSwitchEnabled = true)
 {
-    /// <summary>The default for a device with no stored settings file yet - merge/expand ON, step results OFF.</summary>
-    public static readonly PanelSettings Default = new(MergeExpand: true, ShowMacroStepResults: false);
+    /// <summary>The default for a device with no stored settings file yet - merge/expand ON, step results OFF, auto-switch ON.</summary>
+    public static readonly PanelSettings Default = new(MergeExpand: true, ShowMacroStepResults: false, AutoSwitchEnabled: true);
 }

@@ -14,6 +14,7 @@ using LunaPanel.Server.Hosting;
 using LunaPanel.Server.Http;
 using LunaPanel.Server.Input;
 using LunaPanel.Server.Layouts;
+using LunaPanel.Server.Theme;
 using LunaPanel.Tests.Discovery;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -119,6 +120,7 @@ public class ServerHostBuilderTests
             EdhmSettingsJsonPath: temp.Combine("NoEdhm", "Settings.json"),
             EnvironmentVariables: new Dictionary<string, string>(),
             LocalAppData: localAppData,
+            IsDevBuild: false,
             StatusJsonDirectory: statusJsonDirectory),
         Redactor: new PathRedactor(new[] { (temp.Path, "%TEMP_ROOT%") }),
         Clock: TimeProvider.System,
@@ -414,7 +416,7 @@ public class ServerHostBuilderTests
             "\n",
             ringBuffer.Snapshot().SelectMany(e => new[] { e.Message, e.Detail }).Where(s => s is not null));
 
-        var layout = LunaPanelDirectories.Resolve(host.LocalAppData);
+        var layout = LunaPanelDirectories.Resolve(host.LocalAppData, isDevBuild: false);
         var logFileText = string.Concat(Directory.EnumerateFiles(layout.LogsDirectory, "*.log").Select(File.ReadAllText));
 
         foreach (var secret in new[] { correctCode, wrongCode, rawToken, bogusToken })
@@ -785,6 +787,34 @@ public class ServerHostBuilderTests
         var getResponse = await client.GetAsync(ApiPaths.PanelSettings);
         var body = await getResponse.Content.ReadFromJsonAsync<PanelSettingsEndpoint.Response>(JsonOptions);
         Assert.False(body!.ShowMacroStepResults);
+    }
+
+    [Fact]
+    public async Task PanelSettings_NoneStoredYet_DefaultsToAutoSwitchEnabledOn()
+    {
+        await using var host = await RunningHost.StartAsync();
+        var client = await PairedClientAsync(host);
+
+        var response = await client.GetAsync(ApiPaths.PanelSettings);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<PanelSettingsEndpoint.Response>(JsonOptions);
+        Assert.True(body!.AutoSwitchEnabled);
+    }
+
+    [Fact]
+    public async Task PanelSettings_Post_AutoSwitchEnabledFalse_ThenGet_RoundTrips()
+    {
+        await using var host = await RunningHost.StartAsync();
+        var client = await PairedClientAsync(host);
+
+        var postResponse = await client.PostAsJsonAsync(
+            ApiPaths.PanelSettings, new PanelSettingsEndpoint.Request(true, false, false));
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
+
+        var getResponse = await client.GetAsync(ApiPaths.PanelSettings);
+        var body = await getResponse.Content.ReadFromJsonAsync<PanelSettingsEndpoint.Response>(JsonOptions);
+        Assert.False(body!.AutoSwitchEnabled);
     }
 
     // -------------------------------------------------------------------
@@ -2976,7 +3006,7 @@ public class ServerHostBuilderTests
             ApiPaths.Pair, new { code, deviceName = "Test device", deviceClass = "tablet" }, JsonOptions);
         var deviceId = (await pairResponse.Content.ReadFromJsonAsync<PairEndpoint.SuccessResponse>(JsonOptions))!.DeviceId;
 
-        var layout = LunaPanelDirectories.Resolve(host.LocalAppData);
+        var layout = LunaPanelDirectories.Resolve(host.LocalAppData, isDevBuild: false);
         File.WriteAllText(Path.Combine(layout.LayoutsDirectory, $"theme-override-{deviceId}.json"), "{ not valid json");
 
         var themeResponse = await host.Client.GetAsync(ApiPaths.Theme);
@@ -4016,6 +4046,42 @@ public class ServerHostBuilderTests
     }
 
     /// <summary>
+    /// Same leak shape as the tests above, for <c>ThemeFileWatcher.Changed</c>.
+    /// A missing <c>-=</c> here would grow this host-lifetime singleton's
+    /// invocation list by one delegate per reconnect, each holding a closed
+    /// connection's channel alive.
+    /// </summary>
+    [Fact]
+    public async Task PanelLive_ClientDisconnect_AlsoUnsubscribesFromTheThemeWatcher()
+    {
+        await using var host = await RunningHost.StartAsync();
+        var client = await PairedClientAsync(host);
+        var themeWatcher = host.App.Services.GetRequiredService<ThemeFileWatcher>();
+
+        var baseline = SubscriberCount(themeWatcher, "Changed");
+
+        var response = await client.GetAsync(ApiPaths.PanelLive, HttpCompletionOption.ResponseHeadersRead);
+        var stream = await response.Content.ReadAsStreamAsync();
+        using (var reader = new StreamReader(stream))
+        {
+            await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+        }
+
+        // Proves the baseline is not trivially equal to the after-close count.
+        Assert.Equal(baseline + 1, SubscriberCount(themeWatcher, "Changed"));
+
+        response.Dispose();
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && SubscriberCount(themeWatcher, "Changed") != baseline)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(baseline, SubscriberCount(themeWatcher, "Changed"));
+    }
+
+    /// <summary>
     /// The commander asked for a server-side area, <b>not</b> for the
     /// device's own Timing pane to be taken away - so
     /// <c>/api/macro-timing</c> is deliberately NOT a host-only route, under
@@ -4108,6 +4174,69 @@ public class ServerHostBuilderTests
         var panelBody = await panelResponse.Content.ReadFromJsonAsync<PanelEndpoint.PanelResponse>(JsonOptions);
         var slot1 = panelBody!.Slots.Single(s => s.Index == 1);
         Assert.Equal("H", slot1.Chord);
+    }
+
+    // ------------------------------------------------------------------
+    // An EDHM colour edit, reaching an already-open device (ThemeFileWatcher,
+    // ref/docs/theme.md). Driven end to end through a real host: a real
+    // FileSystemWatcher watching a real directory, a real SSE stream on the
+    // device listener. The EDHM install is planted BEFORE the host starts
+    // (via beforeStart) so discovery's own startup sweep - not any later
+    // route - is what ThemeFileWatcher's constructor sees, exactly like the
+    // rebind test above does for BindsFileWatcher.
+    // ------------------------------------------------------------------
+
+    private static bool? ThemeChangedOf(JsonDocument sseEvent)
+    {
+        var prop = sseEvent.RootElement.GetProperty("themeChanged");
+        return prop.ValueKind == JsonValueKind.Null ? null : prop.GetBoolean();
+    }
+
+    /// <summary>
+    /// The commander's ask, stated directly in this task's brief: a colour
+    /// edit made to the live EDHM theme while a device's live channel is
+    /// already open reaches it with no reconnect and no unrelated event
+    /// (switching pages, editing the layout) happening to trigger a
+    /// re-fetch. Bounded (5s), not a fixed sleep, because this is one of the
+    /// few paths in this file that depends on a real OS FileSystemWatcher
+    /// plus ThemeFileWatcher's own real debounce window - both real timing
+    /// BindsFileWatcherTests' own end-to-end test already accepts for the
+    /// same reason.
+    /// </summary>
+    [Fact]
+    public async Task PanelLive_AThemeEditMadeInEdhm_ReachesTheOpenChannel_WithNoReconnect()
+    {
+        string? iniDirectory = null;
+        await using var host = await RunningHost.StartAsync(beforeStart: temp =>
+        {
+            var userDataFolder = temp.Combine("EdhmUserData");
+            iniDirectory = System.IO.Path.Combine(userDataFolder, "ODYSS", "EDHM", "EDHM-Ini");
+            Directory.CreateDirectory(iniDirectory);
+            File.WriteAllText(System.IO.Path.Combine(iniDirectory, "Advanced.ini"), "[Section]\nKey=Value\n");
+
+            temp.CreateFile(
+                System.IO.Path.Combine("NoEdhm", "Settings.json"),
+                $$"""{"UserDataFolder": "{{userDataFolder.Replace("\\", "\\\\")}}", "ActiveInstance": "ODYSS"}""");
+        });
+        var client = await PairedClientAsync(host);
+        await client.GetAsync($"{ApiPaths.Panel}?w=360&h=640"); // seed the starter layout
+
+        using var response = await client.GetAsync(ApiPaths.PanelLive, HttpCompletionOption.ResponseHeadersRead);
+        using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream);
+        using var initial = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+
+        // An edge, not a level: the connect-time payload says nothing about
+        // a theme edit at all, so its presence later means "this just
+        // changed".
+        Assert.Null(ThemeChangedOf(initial));
+
+        // The theme edit itself: EDHM rewriting a file inside the SAME ini
+        // directory this host already selected.
+        File.WriteAllText(System.IO.Path.Combine(iniDirectory!, "Advanced.ini"), "[Section]\nKey=ChangedValue\n");
+
+        using var pushed = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+        Assert.True(ThemeChangedOf(pushed));
     }
 
     private static string LitOf(JsonDocument sseEvent, int slotIndex) =>
@@ -4542,6 +4671,106 @@ public class ServerHostBuilderTests
         // journal has never named a vessel type, so neither of them matches
         // an InSrv snapshot - which is the vessel term biting, visible here
         // for free.]
+        Assert.Equal(6, SwitchToPageOf(pushed));
+    }
+
+    /// <summary>
+    /// The per-device auto-switch toggle
+    /// (<c>ref/docs/vessel-context.md</c>): with <c>AutoSwitchEnabled</c>
+    /// turned off for this device, the same context change that the sibling
+    /// test above proves DOES push a switch must instead push a
+    /// <c>switchToPage: null</c> event. <see cref="ReadNextSseEventAsync"/>
+    /// itself throws on a timeout if the Status.json change produced no push
+    /// at all, so a successful read here already proves the connection is
+    /// still alive and pushing - the disabled gate silences only the switch
+    /// decision, not the push itself.
+    /// </summary>
+    [Fact]
+    public async Task PanelLive_AutoSwitchDisabledForDevice_AContextChange_PushesNoSwitch()
+    {
+        await using var host = await RunningHost.StartAsync();
+        await DeviceWithContextPagesAsync(host, ContextPage("SRV", "InSrv"));
+        var settingsResponse = await host.Client.PostAsJsonAsync(
+            ApiPaths.PanelSettings, new PanelSettingsEndpoint.Request(true, false, false));
+        Assert.Equal(HttpStatusCode.OK, settingsResponse.StatusCode);
+
+        using var response = await host.Client.GetAsync(ApiPaths.PanelLive, HttpCompletionOption.ResponseHeadersRead);
+        using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream);
+        using var initial = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+        Assert.Null(SwitchToPageOf(initial));
+
+        host.App.Services.GetRequiredService<GameStateStore>().UpdateSnapshot(Running(InSrvFlag));
+
+        using var pushed = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+        Assert.Null(SwitchToPageOf(pushed));
+    }
+
+    /// <summary>
+    /// 2026-09-19: a commander asked whether the toggle was on or off after
+    /// an auto-switch that didn't happen, and there was nothing in the log
+    /// to answer from - a device with the setting off produced identical log
+    /// silence to a device where nothing happened to switch to. This proves
+    /// the fix: opening a live connection for a device with the setting off
+    /// writes one line saying so, once, at connection-open (matching the
+    /// gate itself, which is also only ever read once per connection).
+    /// </summary>
+    [Fact]
+    public async Task PanelLive_AutoSwitchDisabledForDevice_LogsItOnceAtConnectionOpen()
+    {
+        await using var host = await RunningHost.StartAsync();
+        var deviceId = await DeviceWithContextPagesAsync(host, ContextPage("SRV", "InSrv"));
+        var settingsResponse = await host.Client.PostAsJsonAsync(
+            ApiPaths.PanelSettings, new PanelSettingsEndpoint.Request(true, false, false));
+        Assert.Equal(HttpStatusCode.OK, settingsResponse.StatusCode);
+
+        using var response = await host.Client.GetAsync(ApiPaths.PanelLive, HttpCompletionOption.ResponseHeadersRead);
+        using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream);
+        using var initial = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+
+        var ringBuffer = host.App.Services.GetRequiredService<DiagnosticRingBuffer>();
+        var matches = ringBuffer.Snapshot()
+            .Where(e => e.Category == "Layout" && e.Message.Contains("Auto-switch is off", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var logged = Assert.Single(matches);
+        Assert.Equal(DiagnosticLevel.Info, logged.Level);
+        Assert.Contains(deviceId, logged.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The design's own stated limitation, proven rather than left as prose:
+    /// "a toggle taking effect on next reconnect (not instantly mid-connection)
+    /// is consistent with the existing design" (the toggle's own plan). This
+    /// opens the connection FIRST, with the setting still on default (true),
+    /// then flips it off via <c>POST /api/panel/settings</c> while that same
+    /// connection stays open, then drives a context change. If the gate were
+    /// re-read per push rather than captured once at connection-open
+    /// (<c>autoSwitchEnabled</c> in <c>ServerHostBuilder.cs</c>'s live
+    /// handler), this would see <c>switchToPage: null</c> like the sibling
+    /// test above; instead the already-open connection is proven to still
+    /// switch, exactly as it would have before the POST.
+    /// </summary>
+    [Fact]
+    public async Task PanelLive_SettingDisabledAfterConnectionOpened_StillSwitches_UntilReconnect()
+    {
+        await using var host = await RunningHost.StartAsync();
+        await DeviceWithContextPagesAsync(host, ContextPage("SRV", "InSrv"));
+
+        using var response = await host.Client.GetAsync(ApiPaths.PanelLive, HttpCompletionOption.ResponseHeadersRead);
+        using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream);
+        using var initial = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
+        Assert.Null(SwitchToPageOf(initial));
+
+        var settingsResponse = await host.Client.PostAsJsonAsync(
+            ApiPaths.PanelSettings, new PanelSettingsEndpoint.Request(true, false, false));
+        Assert.Equal(HttpStatusCode.OK, settingsResponse.StatusCode);
+
+        host.App.Services.GetRequiredService<GameStateStore>().UpdateSnapshot(Running(InSrvFlag));
+
+        using var pushed = await ReadNextSseEventAsync(reader, TimeSpan.FromSeconds(5));
         Assert.Equal(6, SwitchToPageOf(pushed));
     }
 
@@ -5245,7 +5474,7 @@ public class ServerHostBuilderTests
             new SlotEditEndpoint.AssignRequest(0, 0, "LandingGearToggle", null, null));
         Assert.Equal(HttpStatusCode.OK, assignResponse.StatusCode);
 
-        var layout = LunaPanelDirectories.Resolve(host.LocalAppData);
+        var layout = LunaPanelDirectories.Resolve(host.LocalAppData, isDevBuild: false);
         var tabletLayoutText = File.ReadAllText(Path.Combine(layout.LayoutsDirectory, $"layout-{deviceId}.json"));
         Assert.Contains("LandingGearToggle", tabletLayoutText, StringComparison.Ordinal);
 
@@ -5278,7 +5507,7 @@ public class ServerHostBuilderTests
 
         Assert.Equal(HttpStatusCode.OK, (await host.HostClient.GetAsync($"{ApiPaths.Panel}?w=360&h=640")).StatusCode);
 
-        var layout = LunaPanelDirectories.Resolve(host.LocalAppData);
+        var layout = LunaPanelDirectories.Resolve(host.LocalAppData, isDevBuild: false);
         var hostLayoutPath = Path.Combine(layout.LayoutsDirectory, $"layout-{HostRequest.HostDeviceId}.json");
         // The starter layout's OWN slots already use LandingGearToggle
         // elsewhere (a bare Assert.DoesNotContain on that action name was

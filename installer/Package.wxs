@@ -73,7 +73,7 @@
       Makes sure nothing has LunaPanel's own files open before they are
       replaced. This is what allows the app's self-update path
       (LunaPanel.Tray's UpdateCheckFlow) to simply spawn
-      "msiexec /i <msi> /quiet /norestart" and return, with no quit/wait/
+      "msiexec /i <msi> /passive /norestart" and return, with no quit/wait/
       relaunch sequencing of its own: the installer, not the app, owns
       closing the running copy.
 

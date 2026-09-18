@@ -82,6 +82,9 @@ built alongside **Astrid**, an AI personality.
   room.
 - It won't switch while your thumb is already moving, and it won't drag you
   back if you've tapped somewhere else yourself.
+- Running more than one device? Turn following off for just one of them from
+  that device's own Settings → Panels tab - handy if you want one panel to
+  stay put while the other keeps tracking you around.
 
 **Set up the way you want it**
 
@@ -156,7 +159,11 @@ built alongside **Astrid**, an AI personality.
 
 ## Getting started
 
-1. Run LunaPanel on your PC. It sits in the system tray, next to the clock.
+1. Run LunaPanel on your PC. The first time, before the tray icon even shows
+   up, it checks whether it found Elite Dangerous on its own. If it didn't,
+   you can point it at the right folder there and then, or just tell it
+   you'll deal with it later - either way you're not left guessing. After
+   that it sits in the system tray, next to the clock.
 2. Right-click the tray icon and choose **Add a device**. A window shows a
    six-digit code and the address to open.
 3. On your phone or tablet, open that address and type in the code.

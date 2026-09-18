@@ -28,11 +28,20 @@ public class TrayStatusModelBuilderTests
             ? new[] { new EliteInstallation(EliteEdition.Odyssey, @"C:\fake\Elite", EliteSource.Steam) }
             : Array.Empty<EliteInstallation>();
 
+        // HasResolvableTheme (what "EDHM theme found" actually reports -
+        // see EdhmDiscoveryResult's own remarks) needs an edition with at
+        // least one resolved theme file, not just SettingsFound: true - a
+        // bare SettingsFound: true with no editions is exactly the "found
+        // but nothing resolvable" defect this whole row exists to avoid.
+        var editions = edhmFound
+            ? new[] { new EdhmEditionData("ODYSS", @"C:\fake\EDHM_UI\ODYSS\EDHM\EDHM-Ini", @"C:\fake\EDHM_UI\ODYSS\EDHM\EDHM-Ini\ThemeSettings.json", null) }
+            : Array.Empty<EdhmEditionData>();
+
         return new PathDiscoveryResult(
             EliteInstallations: eliteInstallations,
             Bindings: new BindingsDiscoveryResult(bindsFilePath, bindsFilePath is not null ? new BindsVersion(4, 2) : null, Array.Empty<string>()),
             BindingsSelection: new PresetSelectionResult(null, null, PresetSelectionMethod.Fallback, null, null, false, null),
-            Edhm: new EdhmDiscoveryResult(edhmFound, null, null, Array.Empty<EdhmEditionData>()),
+            Edhm: new EdhmDiscoveryResult(edhmFound, edhmFound ? @"C:\fake\EDHM_UI" : null, null, editions),
             LunaPanelDirectories: new LunaPanelDirectoryLayout(@"C:\fake\Logs", @"C:\fake\Layouts", @"C:\fake\Pairing\device-registry.json"),
             StatusJson: new StatusJsonDiscoveryResult(null));
     }
@@ -66,6 +75,22 @@ public class TrayStatusModelBuilderTests
         AssertRow(model.Rows[2], "EDHM theme found", StatusRowState.Found);
 
         Assert.Equal("3", model.Rows[3].Value);
+    }
+
+    [Fact]
+    public void Build_EdhmSettingsFoundButNoResolvableTheme_EdhmRowIsNotFound()
+    {
+        // SettingsFound: true alone used to be reported as "Found" even
+        // with nothing actually resolvable (the reported defect) - the row
+        // now keys off HasResolvableTheme instead.
+        var discovery = BuildDiscovery() with
+        {
+            Edhm = new EdhmDiscoveryResult(true, @"C:\fake\EDHM_UI", null, Array.Empty<EdhmEditionData>()),
+        };
+
+        var model = TrayStatusModelBuilder.Build("http://192.168.1.37:51823/", discovery, pairedDeviceCount: 0);
+
+        AssertRow(model.Rows[2], "EDHM theme found", StatusRowState.NotFound);
     }
 
     private static void AssertRow(TrayStatusRow row, string expectedLabel, StatusRowState expectedState)

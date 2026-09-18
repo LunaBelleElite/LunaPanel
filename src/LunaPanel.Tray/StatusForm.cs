@@ -3,6 +3,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using LunaPanel.Core.Layouts;
+using LunaPanel.Core.Tray;
 using LunaPanel.Server.Tray;
 
 namespace LunaPanel.Tray;
@@ -56,6 +57,7 @@ internal sealed class StatusForm : Form
     private readonly Action<TrayAction> _onActionClicked;
     private readonly int _hostAccessPort;
     private readonly StatusWindowPositionStore _positionStore;
+    private readonly TrayBehaviorStore _trayBehaviorStore;
     private readonly Panel _contentPanel;
     private readonly Color _background;
     private readonly Color _primaryText;
@@ -82,15 +84,16 @@ internal sealed class StatusForm : Form
     {
         ["Elite install found"] = "Whether LunaPanel found your Elite Dangerous install automatically. If not, use the tray's About window to point it at the right folder.",
         ["Bindings found"] = "Whether LunaPanel found your Elite Dangerous key bindings file - this is what lets buttons follow your own keybindings instead of a fixed default.",
-        ["EDHM theme found"] = "Whether LunaPanel found EDHM-UI's settings, so the panel can match your HUD's own colours. If you don't use EDHM-UI, this stays \"Not found\" and that's fine - the panel falls back to Elite's own orange, or whatever colour you pick yourself.",
+        ["EDHM theme found"] = "Whether LunaPanel found an actual usable HUD colour theme from EDHM-UI, so the panel can match it. If you don't use EDHM-UI, this stays \"Not found\" and that's fine - the panel falls back to Elite's own orange, or whatever colour you pick yourself.",
         ["Paired devices"] = "How many phones or tablets are currently paired to this PC.",
     };
 
-    public StatusForm(TrayStatusModel model, int hostAccessPort, StatusWindowPositionStore positionStore, Action<TrayAction> onActionClicked)
+    public StatusForm(TrayStatusModel model, int hostAccessPort, StatusWindowPositionStore positionStore, TrayBehaviorStore trayBehaviorStore, Action<TrayAction> onActionClicked)
     {
         _onActionClicked = onActionClicked;
         _hostAccessPort = hostAccessPort;
         _positionStore = positionStore;
+        _trayBehaviorStore = trayBehaviorStore;
         _background = ColorTranslator.FromHtml(TrayTheme.Background);
         _primaryText = ColorTranslator.FromHtml(TrayTheme.PrimaryText);
 
@@ -447,11 +450,29 @@ internal sealed class StatusForm : Form
             ? WindowCloseTrigger.UserClickedClose
             : WindowCloseTrigger.ApplicationExiting;
 
-        if (TrayCloseDecision.ShouldMinimizeInsteadOfClosing(trigger))
+        // Read fresh, not captured at construction - the commander can flip
+        // the About window's checkbox while this window is open, and this
+        // decision has to see that change the very next time the X is
+        // clicked, not on the next restart.
+        var minimizeToTrayEnabled = _trayBehaviorStore.Load().MinimizeToTrayEnabled;
+
+        if (TrayCloseDecision.ShouldMinimizeInsteadOfClosing(trigger, minimizeToTrayEnabled))
         {
             e.Cancel = true;
             Hide();
             return;
+        }
+
+        if (trigger == WindowCloseTrigger.UserClickedClose)
+        {
+            // Minimize-to-tray is off: closing this window's X quits the
+            // whole app for real, the same effect as the "Quit" tray-menu
+            // action - not just closing this one form while Kestrel and the
+            // tray icon silently keep running. Routed through the same
+            // dispatch every other tray action already goes through
+            // (TrayApplicationContext.Dispatch), rather than duplicating
+            // BeginQuit's own shutdown logic here.
+            _onActionClicked(TrayAction.Quit);
         }
 
         base.OnFormClosing(e);

@@ -6,6 +6,7 @@ using LunaPanel.Core.Discovery;
 using LunaPanel.Core.Layouts;
 using LunaPanel.Core.Network;
 using LunaPanel.Core.Pairing;
+using LunaPanel.Core.Tray;
 using LunaPanel.Core.Updates;
 using LunaPanel.Server.Discovery;
 using LunaPanel.Server.Updates;
@@ -45,6 +46,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly PortSettingsStore _portSettings;
     private readonly PathOverrideStore _pathOverrides;
     private readonly StatusWindowPositionStore _statusWindowPosition;
+    private readonly TrayBehaviorStore _trayBehaviorStore;
     private readonly PathDiscoveryResult _discovery;
     private readonly IReleaseChecker _releaseChecker;
     private readonly LastLaunchedVersionStore _lastLaunchedVersion;
@@ -67,6 +69,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _portSettings = app.Services.GetRequiredService<PortSettingsStore>();
         _pathOverrides = app.Services.GetRequiredService<PathOverrideStore>();
         _statusWindowPosition = app.Services.GetRequiredService<StatusWindowPositionStore>();
+        _trayBehaviorStore = app.Services.GetRequiredService<TrayBehaviorStore>();
         _discovery = app.Services.GetRequiredService<PathDiscoveryResult>();
         // Built here rather than resolved out of the host's container like
         // everything above, deliberately: nothing the HTTP surface serves
@@ -152,6 +155,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             ShowAddDeviceWindow();
         }
+
+        // "Minimize to system tray" off means LunaPanel always shows a
+        // window on the taskbar while running, not just tray-icon-only - so
+        // a commander who turned it off doesn't have to know to open Status
+        // by hand after every launch. On (the shipped default) keeps today's
+        // exact startup behaviour: tray-icon only, no window shown.
+        if (!_trayBehaviorStore.Load().MinimizeToTrayEnabled)
+        {
+            ShowStatusWindow();
+        }
     }
 
     private void ShowStatusWindow()
@@ -167,7 +180,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        _statusForm = new StatusForm(model, _hostAccessPort, _statusWindowPosition, Dispatch);
+        _statusForm = new StatusForm(model, _hostAccessPort, _statusWindowPosition, _trayBehaviorStore, Dispatch);
         _statusForm.EnsureOnLiveScreen();
         _statusForm.Show();
     }
@@ -223,7 +236,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void ShowAddDeviceWindow()
     {
         _deviceRegistry.OpenPairingWindow();
-        using var form = new AddDeviceForm(PairingCodeFormatter.GroupForDisplay(_deviceRegistry.CurrentCode), _url);
+        // Non-null immediately after OpenPairingWindow() returns, by
+        // construction - it always sets the field before returning.
+        var expiresAt = _deviceRegistry.PairingWindowExpiresAt!.Value;
+        using var form = new AddDeviceForm(PairingCodeFormatter.GroupForDisplay(_deviceRegistry.CurrentCode), _url, expiresAt);
         form.ShowDialog();
         RefreshStatusFormIfOpen();
     }
@@ -280,7 +296,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     /// </summary>
     private void ShowAboutWindow()
     {
-        using var form = new AboutForm(_discovery, _discovery.LunaPanelDirectories, _pathOverrides, BeginQuit);
+        using var form = new AboutForm(_discovery, _discovery.LunaPanelDirectories, _pathOverrides, _trayBehaviorStore, BeginQuit, ShowStatusWindow);
         form.ShowDialog();
     }
 

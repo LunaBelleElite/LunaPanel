@@ -390,7 +390,12 @@ public class PanelClientSourceGuardTests
         // this whole pin is vacuous.
         Assert.DoesNotContain("lastLiveState = state;", body, StringComparison.Ordinal);
 
-        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null };";
+        // [2026-09-18 - SUPERSEDED again. The cacheStatement literal below
+        // (and its three copies in the tests that follow) was
+        // "...layoutChanged: false, macroFinished: null };" and gained
+        // ", themeChanged: false" when the sixth edge field was added.
+        // Superseded, not weakened: the claim is one field larger.]
+        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null, themeChanged: false };";
         Assert.Contains(cacheStatement, body, StringComparison.Ordinal);
 
         var cacheIndex = body.IndexOf(cacheStatement, StringComparison.Ordinal);
@@ -420,7 +425,7 @@ public class PanelClientSourceGuardTests
     {
         var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function applyLive(state)");
 
-        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null };";
+        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null, themeChanged: false };";
         Assert.Contains(cacheStatement, body, StringComparison.Ordinal);
         Assert.DoesNotContain("timing: null", cacheStatement, StringComparison.Ordinal);
         Assert.DoesNotContain("slots:", cacheStatement, StringComparison.Ordinal);
@@ -465,7 +470,7 @@ public class PanelClientSourceGuardTests
     {
         var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function applyLive(state)");
 
-        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null };";
+        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null, themeChanged: false };";
         Assert.Contains(cacheStatement, body, StringComparison.Ordinal);
 
         var cacheIndex = body.IndexOf(cacheStatement, StringComparison.Ordinal);
@@ -473,6 +478,76 @@ public class PanelClientSourceGuardTests
 
         Assert.True(layoutCheckIndex >= 0, "Expected the layoutChanged edge check to be present.");
         Assert.True(cacheIndex < layoutCheckIndex, "Expected the cached copy to be assigned before the layoutChanged check.");
+    }
+
+    // ------------------------------------------------------------------
+    // ThemeChanged (2026-09-18) - an EDHM colour edit reaching an
+    // already-open device (ThemeFileWatcher). Reuses requestBindingsRefetch
+    // for the button grid, same "bare re-fetch signal" shape as
+    // bindingsChanged/layoutChanged above, PLUS a second, conditional
+    // refresh of the settings gear's own theme fetch (loadTheme) when its
+    // sheet happens to be open right now.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The live handler must ROUTE a theme-changed signal through
+    /// <c>requestBindingsRefetch</c> too - the same one-word "simplification"
+    /// risk <c>bindingsChanged</c>'s own pin above guards against, just for
+    /// the third caller of that function.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_TheLiveHandler_RoutesThemeChangedThroughRequestBindingsRefetch()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function applyLive(state)");
+        var themeBranch = ExtractArm(body, "if (state.themeChanged) {");
+
+        Assert.Contains("requestBindingsRefetch();", themeBranch, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The second half of a theme-changed push: the settings gear's own
+    /// "From your HUD" swatches (<c>GET /api/theme</c> via <c>loadTheme()</c>)
+    /// are NOT refreshed by <c>requestBindingsRefetch</c>/<c>loadPanel</c> at
+    /// all - a client that never opened the settings sheet must not pay for
+    /// a fetch that has nothing on screen to update, so this is gated on the
+    /// sheet actually being open, exactly the same condition <c>boot()</c>
+    /// already uses to decide whether to call <c>loadTheme()</c> for any of
+    /// its four hash-routed panes.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_ThemeChanged_RefreshesTheSettingsSheetTheme_OnlyWhenItIsOpen()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function applyLive(state)");
+
+        var themeBranch = ExtractArm(body, "if (state.themeChanged) {");
+
+        Assert.Contains("classList.contains('hidden')", themeBranch, StringComparison.Ordinal);
+        Assert.Contains("loadTheme()", themeBranch, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same replay lockup <c>bindingsChanged</c>'s own cached-copy pin
+    /// guards against (2026-09-11's "rebind locks the panel"), for the sixth
+    /// edge field: the cached copy must have <c>themeChanged</c> cleared too,
+    /// or <c>renderPanel</c>'s unconditional replay of <c>lastLiveState</c> at
+    /// the end of every <c>loadPanel()</c> - including the very render the
+    /// refetch itself produces - would see it still <c>true</c> and re-fire
+    /// <c>requestBindingsRefetch()</c> (and, if the sheet happened to be
+    /// open, <c>loadTheme()</c> too) forever.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_ApplyLive_ClearsThemeChangedOnTheCachedCopy_BeforeTheEdgeHandlerRuns()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function applyLive(state)");
+
+        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null, themeChanged: false };";
+        Assert.Contains(cacheStatement, body, StringComparison.Ordinal);
+
+        var cacheIndex = body.IndexOf(cacheStatement, StringComparison.Ordinal);
+        var themeCheckIndex = body.IndexOf("if (state.themeChanged)", StringComparison.Ordinal);
+
+        Assert.True(themeCheckIndex >= 0, "Expected the themeChanged edge check to be present.");
+        Assert.True(cacheIndex < themeCheckIndex, "Expected the cached copy to be assigned before the themeChanged check.");
     }
 
     // ------------------------------------------------------------------
@@ -2110,9 +2185,39 @@ public class PanelClientSourceGuardTests
 
         Assert.Contains("const overflowingAtFloor = [];", body, StringComparison.Ordinal);
         Assert.Contains(
-            "if (px <= MIN_PX && (b.scrollHeight > b.clientHeight + 1 || b.scrollWidth > b.clientWidth + 1)) {",
+            "if (px <= MIN_PX && (b.scrollHeight > b.clientHeight + OVERFLOW_TOLERANCE_PX || b.scrollWidth > b.clientWidth + OVERFLOW_TOLERANCE_PX)) {",
             body, StringComparison.Ordinal);
         Assert.Contains("overflowingAtFloor.push(b);", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The shrink loop's own overflow check uses the SAME named tolerance
+    /// as the floor check above it</b> - not a re-typed magic number that
+    /// could silently drift out of sync. Both checks exist to answer one
+    /// question ("does this button's label still overflow its padded box by
+    /// more than a comfortable margin?") and if they ever disagreed, a
+    /// button could stop shrinking under one threshold while being flagged
+    /// clipped under the other. (2026-09-18: this tolerance replaced a bare
+    /// "+ 1" that only guaranteed no literal overflow, not any visible
+    /// margin beyond padPx - see the constant's own comment.)
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_LayoutGrid_ShrinkLoopAndFloorCheck_UseTheSameOverflowToleranceConstant()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function layoutGrid(data)");
+
+        Assert.Contains("const OVERFLOW_TOLERANCE_PX = 6;", body, StringComparison.Ordinal);
+        Assert.Contains(
+            "while (px > MIN_PX && (b.scrollHeight > b.clientHeight + OVERFLOW_TOLERANCE_PX || b.scrollWidth > b.clientWidth + OVERFLOW_TOLERANCE_PX)) {",
+            body, StringComparison.Ordinal);
+        Assert.Contains(
+            "if (px <= MIN_PX && (b.scrollHeight > b.clientHeight + OVERFLOW_TOLERANCE_PX || b.scrollWidth > b.clientWidth + OVERFLOW_TOLERANCE_PX)) {",
+            body, StringComparison.Ordinal);
+
+        // No bare "+ 1" tolerance survives anywhere in this function - the
+        // exact regression this fallback closed.
+        Assert.DoesNotContain("clientHeight + 1", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("clientWidth + 1", body, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2424,6 +2529,26 @@ public class PanelClientSourceGuardTests
     }
 
     /// <summary>
+    /// The auto-switch toggle must live in <c>panePanels</c> specifically -
+    /// same reasoning as <see cref="PanelClientSource_ShowMacroStepResultsToggle_LivesInThePaneMacrosPane_NotPanePanels"/>,
+    /// reversed: a copy-paste into <c>paneMacros</c> instead would satisfy a
+    /// bare whole-file <c>Contains</c> just as well as the correct placement
+    /// does.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_AutoSwitchEnabledToggle_LivesInThePanePanelsPane_NotPaneMacros()
+    {
+        var content = ReadPanelClientSource();
+
+        var panelsPane = ExtractBetween(content, "id=\"panePanels\"", "id=\"paneBindings\"");
+        Assert.Contains("id=\"autoSwitchEnabledToggle\"", panelsPane, StringComparison.Ordinal);
+        Assert.Contains("id=\"autoSwitchEnabledHelp\"", panelsPane, StringComparison.Ordinal);
+
+        var macrosPane = ExtractBetween(content, "id=\"paneMacros\"", "id=\"paneTiming\"");
+        Assert.DoesNotContain("id=\"autoSwitchEnabledToggle\"", macrosPane, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Tap-to-open, never hover - same discipline as
     /// <see cref="BuildPage_MergeExpandHelp_IsTapToOpen_NeverHover"/> et al.
     /// </summary>
@@ -2468,6 +2593,75 @@ public class PanelClientSourceGuardTests
     }
 
     /// <summary>
+    /// The relocated auto-switch toggle is loaded from the same response as
+    /// <c>mergeExpand</c>/<c>showMacroStepResults</c> - it needs no extra
+    /// cached-variable step the way <c>showMacroStepResults</c> does, since
+    /// nothing else in the client reads this flag; seeding the checkbox is
+    /// the whole job.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_LoadPanelSettings_SeedsTheAutoSwitchEnabledCheckbox()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "async function loadPanelSettings()");
+
+        Assert.Contains("el('autoSwitchEnabledToggle').checked = settings.autoSwitchEnabled;", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The POST includes all three settings together - same
+    /// always-send-everything reasoning as
+    /// <see cref="PanelClientSource_PostPanelSettings_SendsBothFieldsTogether"/>:
+    /// a POST that omitted <c>autoSwitchEnabled</c> would silently reset it
+    /// to the server's default.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_PostPanelSettings_SendsAutoSwitchEnabledToo()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "async function postPanelSettings()");
+
+        Assert.Contains("autoSwitchEnabled: el('autoSwitchEnabledToggle').checked", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The simple <c>mergeExpandToggle</c> wiring shape - a bare
+    /// <c>addEventListener('change', postPanelSettings)</c> with no extra
+    /// cached-variable step, unlike <c>showMacroStepResultsToggle</c>'s own
+    /// listener.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_AutoSwitchEnabledToggle_PostsOnChange()
+    {
+        var content = ReadPanelClientSource();
+
+        Assert.Contains("el('autoSwitchEnabledToggle').addEventListener('change', postPanelSettings);", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Tap-to-open, never hover - same discipline as
+    /// <see cref="PanelClientSource_ShowMacroStepResultsHelp_IsTapToOpen"/>.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_AutoSwitchEnabledHelp_IsTapToOpen()
+    {
+        var content = ReadPanelClientSource();
+
+        Assert.Contains("autoSwitchEnabledHelp').addEventListener('click'", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The help copy has to name the one fact the user asked to have
+    /// surfaced explicitly: each paired device carries its own independent
+    /// copy of this setting, not a machine-wide one.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_AutoSwitchEnabledHelp_MentionsPerDeviceIndependence()
+    {
+        var content = ReadPanelClientSource();
+
+        Assert.Contains("Each paired device has its own copy of this setting.", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// <b>The gate itself.</b> Since O28 (2026-09-17) the read-back has
     /// exactly one call site - <c>onMacroFinished</c>, fed by the live
     /// channel - so the setting gates it there, and the unguarded call must
@@ -2506,7 +2700,7 @@ public class PanelClientSourceGuardTests
     {
         var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function applyLive(state)");
 
-        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null };";
+        const string cacheStatement = "lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null, themeChanged: false };";
         Assert.Contains(cacheStatement, body, StringComparison.Ordinal);
 
         var cacheIndex = body.IndexOf(cacheStatement, StringComparison.Ordinal);
@@ -2897,5 +3091,79 @@ public class PanelClientSourceGuardTests
 
         Assert.Contains("openArmEditor(step, 'then');", body, StringComparison.Ordinal);
         Assert.Contains("openArmEditor(step, 'else');", body, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // Cold first-launch viewport race (a commander-reported screenshot:
+    // adjacent button labels overlapping on the very first paired-page
+    // load in portrait, gone after rotating the device twice, never
+    // recurring). ref/docs/web-client.md's "Resize and orientation
+    // handling" section names the mechanism this guards: panelUrl() reads
+    // innerWidth/innerHeight synchronously, and a cold mobile WebView can
+    // report a stale value at that exact instant, so the server computes
+    // cols/cellWidth for the WRONG viewport and layoutGrid()'s text-fit
+    // pass sizes labels against it. Same "no headless browser, source-scan
+    // pin only" ceiling as the rest of this file - nothing here can
+    // simulate the actual mobile-browser race, only that boot() contains
+    // the self-correction.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The double-requestAnimationFrame wait must happen BEFORE the first
+    /// <c>loadPanel()</c> call in <c>boot()</c>, not after - waiting after
+    /// the first fetch has already gone out with a possibly-stale viewport
+    /// does nothing for the request that matters.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_Boot_WaitsForDoubleRequestAnimationFrame_BeforeTheFirstLoadPanelCall()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "async function boot()");
+
+        const string rafWait = "await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));";
+        Assert.Contains(rafWait, body, StringComparison.Ordinal);
+
+        var rafIndex = body.IndexOf(rafWait, StringComparison.Ordinal);
+        var firstLoadPanelIndex = body.IndexOf("await loadPanel();", StringComparison.Ordinal);
+
+        Assert.True(firstLoadPanelIndex >= 0, "Expected boot() to still call loadPanel().");
+        Assert.True(rafIndex < firstLoadPanelIndex, "Expected the double-rAF wait to run before the first loadPanel() call.");
+    }
+
+    /// <summary>
+    /// The second line of defense: exactly one automatic follow-up check,
+    /// scheduled through the same <c>scheduleReload</c> path a real
+    /// rotation already uses, AFTER the first <c>loadPanel()</c> call
+    /// resolves. Not a second direct <c>loadPanel()</c> call and not a
+    /// loop - reusing <c>scheduleReload</c> is what keeps this a no-op on
+    /// an already-correct load, the same debounce a resize already relies
+    /// on for that guarantee.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_Boot_SchedulesExactlyOneAutomaticFollowUpReload_AfterTheFirstLoadPanelCall()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "async function boot()");
+
+        Assert.Contains("scheduleReload(400);", body, StringComparison.Ordinal);
+
+        var firstLoadPanelIndex = body.IndexOf("await loadPanel();", StringComparison.Ordinal);
+        var scheduleReloadIndex = body.IndexOf("scheduleReload(400);", StringComparison.Ordinal);
+
+        Assert.True(firstLoadPanelIndex >= 0, "Expected boot() to still call loadPanel().");
+        Assert.True(scheduleReloadIndex > firstLoadPanelIndex, "Expected the follow-up scheduleReload to run after the first loadPanel() call.");
+
+        // Never a loop and never a second bare loadPanel() call sitting
+        // beside the scheduled one - boot() itself must call loadPanel()
+        // exactly once; the follow-up goes through scheduleReload only.
+        var loadPanelCount = 0;
+        var searchFrom = 0;
+        while (true)
+        {
+            var idx = body.IndexOf("loadPanel()", searchFrom, StringComparison.Ordinal);
+            if (idx < 0) break;
+            loadPanelCount++;
+            searchFrom = idx + 1;
+        }
+
+        Assert.Equal(1, loadPanelCount);
     }
 }

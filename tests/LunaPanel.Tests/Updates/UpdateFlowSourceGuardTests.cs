@@ -63,6 +63,15 @@ public class UpdateFlowSourceGuardTests
     /// on existing with nothing using it. Measured, not reasoned about: that
     /// mutation predicted one red and produced zero. The needle is now
     /// scoped to the thing it guards.
+    ///
+    /// [2026-09-18] Switched to <c>/passive</c> (this task's own fix, closing
+    /// the "silent install looks like a hung tray icon for 15-30s" gap).
+    /// Same reasoning still applies with the new value: this guards against
+    /// a future edit silently reverting to fully-invisible <c>/quiet</c>, and
+    /// equally against silently going the other way to a full <c>/i "..."</c>
+    /// UI-mode install, which would require user interaction and could block
+    /// the install indefinitely. <c>/passive</c> is the one value that is
+    /// both visible and cannot be dismissed or block anything.
     /// </summary>
     [Fact]
     public void UpdateCheckFlow_HandsTheDownloadToMsiexec_SilentlyAndWithoutRestarting()
@@ -70,7 +79,7 @@ public class UpdateFlowSourceGuardTests
         var source = UpdateCheckFlowSource();
 
         Assert.Contains("msiexec.exe", source, StringComparison.Ordinal);
-        Assert.Contains("""/i \"{installerPath}\" /quiet /norestart""", source, StringComparison.Ordinal);
+        Assert.Contains("""/i \"{installerPath}\" /passive /norestart""", source, StringComparison.Ordinal);
     }
 
     /// <summary>

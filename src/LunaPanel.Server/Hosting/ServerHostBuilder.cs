@@ -12,6 +12,7 @@ using LunaPanel.Core.Macros;
 using LunaPanel.Core.Network;
 using LunaPanel.Core.Pairing;
 using LunaPanel.Core.Theme;
+using LunaPanel.Core.Tray;
 using LunaPanel.Server.Bindings;
 using LunaPanel.Server.Discovery;
 using LunaPanel.Server.Http;
@@ -53,7 +54,7 @@ public static class ServerHostBuilder
             throw new PlatformNotSupportedException("LunaPanel.Server requires Windows (Win32 SendInput).");
         }
 
-        var layout = LunaPanelDirectories.Resolve(options.DiscoveryEnvironment.LocalAppData);
+        var layout = LunaPanelDirectories.Resolve(options.DiscoveryEnvironment.LocalAppData, options.DiscoveryEnvironment.IsDevBuild);
 
         var writer = new DiagnosticLogWriter(layout.LogsDirectory, options.Clock, options.LogRetentionDays, options.Redactor);
         var ringBuffer = new DiagnosticRingBuffer(options.DiagnosticsRingBufferCapacity);
@@ -189,6 +190,10 @@ public static class ServerHostBuilder
         // (LunaPanel.Tray.StatusForm) - server-wide, no device id, same as
         // portSettingsStore above.
         var statusWindowPositionStore = new StatusWindowPositionStore(discovery.LunaPanelDirectories.LayoutsDirectory, log);
+        // Same directory and shape again, for the tray's "Minimize to system
+        // tray" checkbox (LunaPanel.Tray.AboutForm) - server-wide, no device
+        // id, same as portSettingsStore above.
+        var trayBehaviorStore = new TrayBehaviorStore(discovery.LunaPanelDirectories.LayoutsDirectory, log);
         // Wraps the just-computed discovery result in a holder so "Refresh
         // bindings" (ref/docs/bindings-source.md) can swap in a freshly
         // re-run PathDiscoveryService.Discover pass without restarting the
@@ -210,6 +215,17 @@ public static class ServerHostBuilder
         // reader beside it.
         var bindsWatcher = new BindsFileWatcher(discoveryHolder, options.Clock, log);
         var themeResolver = new LiveThemeResolver(options.DiscoveryEnvironment, discovery, log);
+        // Watches the whole ini directory themeResolver reads through for the
+        // active EDHM edition, so a colour edit made while a device's live
+        // channel is open reaches it without a restart or some unrelated
+        // event (switching pages, editing the layout) happening to trigger a
+        // re-fetch - see ThemeFileWatcher's own remarks for exactly what this
+        // does and does not cover (switching EDITION is unaffected, same
+        // limit LiveThemeResolver already documents for a startup-frozen
+        // discovery result). Never throws even when no EDHM edition was
+        // discovered at all; it degrades to raising nothing, same "a layout
+        // can't break, only degrade" contract as themeResolver beside it.
+        var themeWatcher = new ThemeFileWatcher(discovery, options.Clock, log);
         // KeyInjectorOverride is null for every production caller - see its
         // own remarks on ServerHostOptions for why the seam exists at all.
         var keyInjector = options.KeyInjectorOverride ?? new Win32KeyInjector(log, () => options.DiagnosticModeEnabled);
@@ -401,10 +417,12 @@ public static class ServerHostBuilder
         builder.Services.AddSingleton(portSettingsStore);
         builder.Services.AddSingleton(pathOverrideStore);
         builder.Services.AddSingleton(statusWindowPositionStore);
+        builder.Services.AddSingleton(trayBehaviorStore);
         builder.Services.AddSingleton(orphanMarkerStore);
         builder.Services.AddSingleton(bindingsReader);
         builder.Services.AddSingleton(bindsWatcher);
         builder.Services.AddSingleton(themeResolver);
+        builder.Services.AddSingleton(themeWatcher);
         builder.Services.AddSingleton(keyInjector);
         builder.Services.AddSingleton(latches);
         builder.Services.AddSingleton(gameStateStore);
@@ -438,6 +456,12 @@ public static class ServerHostBuilder
         // when no bindings file was discovered) - so its disposal is
         // unconditional too.
         app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.Register(bindsWatcher.Dispose);
+
+        // Same reasoning as bindsWatcher immediately above: themeWatcher is
+        // always constructed (its own constructor already degrades cleanly
+        // when no EDHM edition was discovered), so its disposal is
+        // unconditional too.
+        app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.Register(themeWatcher.Dispose);
 
         // Release rule 4 (ref/docs/latching-keys.md): the server shutting
         // down must not leave a key held in the game with nothing left
@@ -671,7 +695,7 @@ public static class ServerHostBuilder
             }
 
             var deviceId = (string)context.Items["DeviceId"]!;
-            var settings = new PanelSettings(request.MergeExpand, request.ShowMacroStepResults);
+            var settings = new PanelSettings(request.MergeExpand, request.ShowMacroStepResults, request.AutoSwitchEnabled);
             settingsStore.Save(deviceId, settings);
             return Results.Ok(PanelSettingsEndpoint.BuildResponse(settings));
         });
@@ -1917,6 +1941,8 @@ public static class ServerHostBuilder
             MacroPressOutcomeBroadcaster macroOutcomes,
             MacroTimingSettingsStore timingStore,
             BindsFileWatcher bindsWatcher,
+            ThemeFileWatcher themeWatcher,
+            PanelSettingsStore panelSettingsStore,
             IDiagnosticLog diagLog,
             CancellationToken ct) =>
         {
@@ -1955,6 +1981,24 @@ public static class ServerHostBuilder
             // write one.
             var liveLayout = loadResult.Layout!;
             var livePageIndex = page ?? 0;
+
+            // Per-device auto-switch toggle (ref/docs/vessel-context.md). Read
+            // once at connection-open time, same as liveLayout/livePageIndex -
+            // a toggle flipped mid-connection takes effect on the next
+            // reconnect, consistent with AutoPageSwitcher already being "one
+            // instance per connection."
+            var autoSwitchEnabled = panelSettingsStore.Load(deviceId).AutoSwitchEnabled;
+            if (!autoSwitchEnabled)
+            {
+                // Once per connection, not per push - the gate itself is only
+                // read once here (see the comment above), so this can never
+                // spam. Added 2026-09-19: without this line, a device with
+                // the toggle off produces IDENTICAL log silence to a device
+                // where nothing happened to switch to, which is exactly the
+                // ambiguity that made a real "why didn't it switch" question
+                // undiagnosable from the log alone.
+                diagLog.Info("Layout", "Auto-switch is off for this device - vessel-context changes will not move its page", $"deviceId={deviceId}");
+            }
 
             PanelLiveEndpoint.BuildResult Build(StatusSnapshot? snapshot) =>
                 PanelLiveEndpoint.BuildState(liveLayout, livePageIndex, cat, snapshot, latchRegistry.LatchedActions(deviceId), macroRunner.RunningMacroIds);
@@ -1997,7 +2041,9 @@ public static class ServerHostBuilder
                     return;
                 }
 
-                var switchTo = switcher.Decide(liveLayout, livePageIndex, snapshot, journalState.CurrentVesselType, diagLog);
+                var switchTo = autoSwitchEnabled
+                    ? switcher.Decide(liveLayout, livePageIndex, snapshot, journalState.CurrentVesselType, diagLog)
+                    : null;
                 var state = built.State!;
                 if (switchTo is not null)
                 {
@@ -2086,6 +2132,26 @@ public static class ServerHostBuilder
                 updates.Writer.TryWrite(built.State! with { BindingsChanged = true });
             }
 
+            // An EDHM colour edit is not a game-state change either, and -
+            // like a rebind - it carries no payload of its own here:
+            // ThemeFileWatcher.Changed fires with no argument, and this
+            // pushes a bare "re-fetch" signal rather than threading theme
+            // content through the live channel (see
+            // PanelLiveEndpoint.LiveState.ThemeChanged and
+            // ThemeFileWatcher's own remarks for why). Deliberately NOT run
+            // through the switcher, same as OnBindingsChanged: a theme edit
+            // says nothing about vessel context.
+            void OnThemeChanged()
+            {
+                var built = Build(gameState.Current);
+                if (built.Outcome != PanelLiveEndpoint.BuildOutcome.Ok)
+                {
+                    return;
+                }
+
+                updates.Writer.TryWrite(built.State! with { ThemeChanged = true });
+            }
+
             void OnLayoutSaved(string savedDeviceId)
             {
                 if (!string.Equals(savedDeviceId, deviceId, StringComparison.Ordinal))
@@ -2140,6 +2206,7 @@ public static class ServerHostBuilder
             store.Saved += OnLayoutSaved;
             timingStore.Saved += OnTimingSaved;
             bindsWatcher.Changed += OnBindingsChanged;
+            themeWatcher.Changed += OnThemeChanged;
 
             // Release rule 2 (ref/docs/latching-keys.md): this connection IS
             // the device's live channel, so a latch made from now on belongs
@@ -2183,6 +2250,7 @@ public static class ServerHostBuilder
                 store.Saved -= OnLayoutSaved;
                 timingStore.Saved -= OnTimingSaved;
                 bindsWatcher.Changed -= OnBindingsChanged;
+                themeWatcher.Changed -= OnThemeChanged;
                 var releasedByClose = latchRegistry.CloseChannel(latchChannel);
                 diagLog.Info(
                     "Status",

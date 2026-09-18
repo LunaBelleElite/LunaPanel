@@ -63,9 +63,7 @@ public sealed class LiveThemeResolver
 
     private (string? ThemeSettingsJson, Dictionary<string, string> IniFilesByName, string? XmlProfileIni, string? OverrideXml) ReadInputs()
     {
-        var edition = _discovery.Edhm.Editions.FirstOrDefault(e =>
-            string.Equals(e.EditionFolderName, _discovery.Edhm.ActiveInstance, StringComparison.OrdinalIgnoreCase));
-        edition ??= _discovery.Edhm.Editions.FirstOrDefault();
+        var edition = _discovery.Edhm.SelectActiveEdition();
 
         var themeSettingsJson = edition?.ThemeSettingsJsonPath is { } themeSettingsPath ? TryRead(themeSettingsPath) : null;
         var xmlProfileIni = edition?.XmlProfileIniPath is { } xmlProfilePath ? TryRead(xmlProfilePath) : null;

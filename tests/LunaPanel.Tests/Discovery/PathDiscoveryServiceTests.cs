@@ -13,7 +13,8 @@ public class PathDiscoveryServiceTests
         BindingsDirectory: temp.Combine("NoBindings"),
         EdhmSettingsJsonPath: temp.Combine("NoEdhm", "Settings.json"),
         EnvironmentVariables: new Dictionary<string, string>(),
-        LocalAppData: temp.CreateSubdirectory("LocalAppData"));
+        LocalAppData: temp.CreateSubdirectory("LocalAppData"),
+        IsDevBuild: false);
 
     [Fact]
     public void Discover_CompletelyEmptyEnvironment_ReturnsCleanNotFoundEverywhere_WithoutThrowing()
@@ -90,7 +91,8 @@ public class PathDiscoveryServiceTests
             BindingsDirectory: temp.Combine("Bindings"),
             EdhmSettingsJsonPath: temp.Combine("EDHM-UI-V3", "resources", "data", "Settings.json"),
             EnvironmentVariables: new Dictionary<string, string>(),
-            LocalAppData: temp.CreateSubdirectory("LocalAppData"));
+            LocalAppData: temp.CreateSubdirectory("LocalAppData"),
+            IsDevBuild: false);
 
         var log = new DiagnosticRingBuffer(500);
         var result = PathDiscoveryService.Discover(environment, log);
@@ -170,7 +172,8 @@ public class PathDiscoveryServiceTests
             BindingsDirectory: temp.Combine("Bindings"),
             EdhmSettingsJsonPath: temp.Combine("NoEdhm", "Settings.json"),
             EnvironmentVariables: new Dictionary<string, string>(),
-            LocalAppData: temp.CreateSubdirectory("LocalAppData"));
+            LocalAppData: temp.CreateSubdirectory("LocalAppData"),
+            IsDevBuild: false);
 
         var result = PathDiscoveryService.Discover(environment, new DiagnosticRingBuffer(500));
 
@@ -245,6 +248,7 @@ public class PathDiscoveryServiceTests
             EdhmSettingsJsonPath: temp.Combine("NoEdhm", "Settings.json"),
             EnvironmentVariables: new Dictionary<string, string>(),
             LocalAppData: temp.CreateSubdirectory("LocalAppData"),
+            IsDevBuild: false,
             EliteInstallPathOverride: manualRoot);
 
         var result = PathDiscoveryService.Discover(environment, new DiagnosticRingBuffer(500));

@@ -113,4 +113,108 @@ public class SteamInstallDiscoveryTests
         var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(null, null);
         Assert.Empty(candidates);
     }
+
+    [Fact]
+    public void GetCandidateSteamRoots_RegistryValuePresent_AddedAsExtraCandidate()
+    {
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            @"C:\Program Files (x86)",
+            @"C:\Program Files",
+            readSteamPathFromCurrentUserRegistry: () => @"C:\-Programs\Steam");
+
+        Assert.Equal(
+            new[] { @"C:\Program Files (x86)\Steam", @"C:\Program Files\Steam", @"C:\-Programs\Steam" },
+            candidates);
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_RegistryValueUsesForwardSlashes_NormalizedToWindowsPath()
+    {
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            null,
+            null,
+            readSteamPathFromCurrentUserRegistry: () => "C:/-Programs/Steam");
+
+        Assert.Equal(new[] { @"C:\-Programs\Steam" }, candidates);
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_BothRegistryReadersPresent_BothAdded()
+    {
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            null,
+            null,
+            readSteamPathFromCurrentUserRegistry: () => @"C:\CurrentUserSteam",
+            readInstallPathFromLocalMachineRegistry: () => @"C:\LocalMachineSteam");
+
+        Assert.Equal(new[] { @"C:\CurrentUserSteam", @"C:\LocalMachineSteam" }, candidates);
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_RegistryKeyOrValueAbsent_FallsBackToTheOriginalTwo()
+    {
+        // A missing key/value is represented as the reader callback
+        // returning null, exactly like the real Win32SteamRegistryLookup
+        // methods do when RegistryKey.OpenSubKey or GetValue finds nothing.
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            @"C:\Program Files (x86)",
+            @"C:\Program Files",
+            readSteamPathFromCurrentUserRegistry: () => null,
+            readInstallPathFromLocalMachineRegistry: () => null);
+
+        Assert.Equal(
+            new[] { @"C:\Program Files (x86)\Steam", @"C:\Program Files\Steam" },
+            candidates);
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_RegistryAccessThrows_DegradesCleanlyNoThrow()
+    {
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            @"C:\Program Files (x86)",
+            @"C:\Program Files",
+            readSteamPathFromCurrentUserRegistry: () => throw new InvalidOperationException("registry access denied"));
+
+        Assert.Equal(
+            new[] { @"C:\Program Files (x86)\Steam", @"C:\Program Files\Steam" },
+            candidates);
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_RegistryAccessThrows_LogsWarning()
+    {
+        var log = new DiagnosticRingBuffer(200);
+        SteamInstallDiscovery.GetCandidateSteamRoots(
+            null,
+            null,
+            readSteamPathFromCurrentUserRegistry: () => throw new InvalidOperationException("registry access denied"),
+            log: log);
+
+        Assert.Contains(log.Snapshot(), e => e.Message.Contains("read failed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_RegistryPathDuplicatesAProgramFilesGuess_NotReturnedTwice()
+    {
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            @"C:\Program Files (x86)",
+            @"C:\Program Files",
+            readSteamPathFromCurrentUserRegistry: () => @"C:\Program Files (x86)\Steam");
+
+        Assert.Equal(
+            new[] { @"C:\Program Files (x86)\Steam", @"C:\Program Files\Steam" },
+            candidates);
+    }
+
+    [Fact]
+    public void GetCandidateSteamRoots_BothRegistryReadersReturnSameDuplicatePath_AddedOnlyOnce()
+    {
+        var candidates = SteamInstallDiscovery.GetCandidateSteamRoots(
+            null,
+            null,
+            readSteamPathFromCurrentUserRegistry: () => @"C:\SameSteamRoot",
+            readInstallPathFromLocalMachineRegistry: () => @"C:\SameSteamRoot");
+
+        Assert.Equal(new[] { @"C:\SameSteamRoot" }, candidates);
+    }
 }

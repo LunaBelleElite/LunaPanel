@@ -64,7 +64,11 @@ public sealed class PathOverrideStore
                     ? edhmElement.GetString()
                     : null;
 
-                return new PathOverrideSettings(eliteInstallPath, edhmSettingsJsonPath);
+                var eliteSetupAcknowledged = root.TryGetProperty("eliteSetupAcknowledged", out var acknowledgedElement)
+                    && acknowledgedElement.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    && acknowledgedElement.GetBoolean();
+
+                return new PathOverrideSettings(eliteInstallPath, edhmSettingsJsonPath, eliteSetupAcknowledged);
             }
             catch (JsonException ex)
             {
@@ -97,6 +101,7 @@ public sealed class PathOverrideStore
                 {
                     writer.WriteString("edhmSettingsJsonPath", settings.EdhmSettingsJsonPath);
                 }
+                writer.WriteBoolean("eliteSetupAcknowledged", settings.EliteSetupAcknowledged);
                 writer.WriteEndObject();
             }
 
@@ -108,7 +113,7 @@ public sealed class PathOverrideStore
             _log.Info(
                 LogCategory,
                 "Saved path overrides",
-                $"eliteInstallPath={settings.EliteInstallPath ?? "(none)"}, edhmSettingsJsonPath={settings.EdhmSettingsJsonPath ?? "(none)"}");
+                $"eliteInstallPath={settings.EliteInstallPath ?? "(none)"}, edhmSettingsJsonPath={settings.EdhmSettingsJsonPath ?? "(none)"}, eliteSetupAcknowledged={settings.EliteSetupAcknowledged}");
         }
 
         Saved?.Invoke(settings);

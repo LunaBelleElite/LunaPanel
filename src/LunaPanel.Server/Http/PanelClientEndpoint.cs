@@ -634,8 +634,18 @@ public static class PanelClientEndpoint
   .rung.v-Compact { color: var(--lp-text); }
   .rung.v-TooSmall { color: #d13b2e; }
 
+  /* Never had its own rule at all - rendered as a bare, unstyled browser
+     button until 2026-09-18. Same visual language as the other panes'
+     action buttons (#resetTheme/#refreshBindings/#addAnotherDevice)
+     rather than a new one. */
+  #resetToDefault {
+    margin-top: 10px; font: inherit; font-size: 12px; background: transparent;
+    color: var(--lp-text); border: 1px solid var(--lp-frame); border-radius: 6px;
+    padding: 8px 14px; cursor: pointer;
+  }
+
   .mergeExpandRow { display: flex; align-items: center; gap: 8px; }
-  #mergeExpandHelp {
+  #mergeExpandHelp, #autoSwitchEnabledHelp {
     font: inherit; font-size: 12px; background: transparent; color: var(--lp-text);
     border: 1px solid var(--lp-frame); border-radius: 50%; width: 22px; height: 22px;
     padding: 0; cursor: pointer;
@@ -1106,6 +1116,13 @@ public static class PanelClientEndpoint
         <div class="mergeExpandRow">
           <input type="checkbox" id="mergeExpandToggle" checked>
           <button id="mergeExpandHelp" type="button" aria-label="What does this do?">?</button>
+        </div>
+      </div>
+      <div class="roleRow">
+        <span>Follow me between ship, SRV, and on foot</span>
+        <div class="mergeExpandRow">
+          <input type="checkbox" id="autoSwitchEnabledToggle" checked>
+          <button id="autoSwitchEnabledHelp" type="button" aria-label="What does this do?">?</button>
         </div>
       </div>
       <!-- Reset to default (ref/docs/reset-to-default.md): the whole
@@ -2159,6 +2176,17 @@ function layoutGrid(data) {
   // scrappy) - see ref/docs/device-calibration.md.
   const startPx = Math.max(10, Math.min(30, Math.round(Math.min(cellW / 4, cellH / 2.4))));
   const MIN_PX = 8;
+  // [2026-09-18] clientWidth/clientHeight already exclude padPx (box-sizing:
+  // border-box on every element, see the stylesheet's universal selector) -
+  // so a bare "+ 1" here only guarantees the label doesn't overflow the
+  // PADDED box, not that any visible whitespace is left beyond padPx. That
+  // let a single long unbreakable word ("Colonisation", "Dock/Launch")
+  // converge to a size where the text touches the padded edge with no
+  // margin at all, and since `fit` below is the page-wide MINIMUM, that
+  // worst-fitting button's bare-edge size became every other button's size
+  // too. A real margin here, not a leftover-overflow tolerance, is what
+  // keeps that from happening again.
+  const OVERFLOW_TOLERANCE_PX = 6;
   // Breathing room inside each button, scaled to the cell, applied BEFORE
   // the fit loop so text is measured against the box it actually gets.
   const padPx = Math.max(3, Math.min(12, Math.round(Math.min(cellW, cellH) * 0.08)));
@@ -2251,12 +2279,12 @@ function layoutGrid(data) {
   const overflowingAtFloor = [];
   for (const b of made) {
     let px = startPx;
-    while (px > MIN_PX && (b.scrollHeight > b.clientHeight + 1 || b.scrollWidth > b.clientWidth + 1)) {
+    while (px > MIN_PX && (b.scrollHeight > b.clientHeight + OVERFLOW_TOLERANCE_PX || b.scrollWidth > b.clientWidth + OVERFLOW_TOLERANCE_PX)) {
       px -= 1;
       b.style.fontSize = px + 'px';
     }
     if (px < fit) fit = px;
-    if (px <= MIN_PX && (b.scrollHeight > b.clientHeight + 1 || b.scrollWidth > b.clientWidth + 1)) {
+    if (px <= MIN_PX && (b.scrollHeight > b.clientHeight + OVERFLOW_TOLERANCE_PX || b.scrollWidth > b.clientWidth + OVERFLOW_TOLERANCE_PX)) {
       overflowingAtFloor.push(b);
     }
   }
@@ -2635,7 +2663,7 @@ function applyLive(state) {
   // turning it into a steady poll loop instead - the "rebind locks the
   // panel" symptom, user-confirmed live 2026-09-11). state.timing and
   // state.slots are LEVELS, not edges, and must keep replaying untouched.
-  lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null };
+  lastLiveState = { ...state, bindingsChanged: false, switchToPage: null, layoutChanged: false, macroFinished: null, themeChanged: false };
   // A switch, a pushed timing change, or a rebind can all arrive well
   // before Elite has ever launched (a commander adjusting macro timing or
   // rebinding on the PC, or a switch queued while the game was closed) -
@@ -2662,6 +2690,21 @@ function applyLive(state) {
   // or renderPanel's replay would re-toast and re-open the sheet on the
   // next unrelated grid rebuild for a run that ended minutes ago.
   if (state.macroFinished) onMacroFinished(state.macroFinished);
+  // An EDHM colour edit reaching an already-open device (ThemeFileWatcher,
+  // via the live channel's themeChanged edge). Carries no theme content of
+  // its own (see PanelLiveEndpoint.LiveState.ThemeChanged) - reuses the
+  // exact same pointer-safe, coalesced re-fetch path a rebind already uses,
+  // since both are "something changed server-side, re-fetch GET /api/panel"
+  // with nothing more to say, and a grid rebuild must not yank a button out
+  // from under a thumb already moving either way. The settings gear's own
+  // "From your HUD" swatches are a SEPARATE fetch (GET /api/theme) that
+  // loadPanel does not make, so it is only refreshed here if the sheet
+  // showing them is actually open right now - matching the same condition
+  // boot() already uses to decide whether to call loadTheme() at all.
+  if (state.themeChanged) {
+    requestBindingsRefetch();
+    if (!el('settingsSheet').classList.contains('hidden')) loadTheme();
+  }
   // The grid stays visible and tappable whether or not Elite is running -
   // that's what lets a commander lay out and test buttons without the game
   // open. state.gameRunning only ever affected lit state below: with no
@@ -3954,6 +3997,7 @@ async function loadPanelSettings() {
     const settings = await res.json();
     el('mergeExpandToggle').checked = settings.mergeExpand;
     el('showMacroStepResultsToggle').checked = settings.showMacroStepResults;
+    el('autoSwitchEnabledToggle').checked = settings.autoSwitchEnabled;
     showMacroStepResults = settings.showMacroStepResults;
   } catch (e) {
     // The toggles just stay at their last known state this time.
@@ -3969,6 +4013,7 @@ async function postPanelSettings() {
       body: JSON.stringify({
         mergeExpand: el('mergeExpandToggle').checked,
         showMacroStepResults: el('showMacroStepResultsToggle').checked,
+        autoSwitchEnabled: el('autoSwitchEnabledToggle').checked,
       }),
     });
   } catch (e) {
@@ -3977,6 +4022,8 @@ async function postPanelSettings() {
 }
 
 el('mergeExpandToggle').addEventListener('change', postPanelSettings);
+
+el('autoSwitchEnabledToggle').addEventListener('change', postPanelSettings);
 
 el('showMacroStepResultsToggle').addEventListener('change', () => {
   showMacroStepResults = el('showMacroStepResultsToggle').checked;
@@ -3993,6 +4040,10 @@ el('mergeExpandHelp').addEventListener('click', () => {
 
 el('showMacroStepResultsHelp').addEventListener('click', () => {
   showToast('On: pressing a macro-bound button shows a breakdown of what each step in it did afterwards. Off: the button just presses, with no breakdown sheet.');
+});
+
+el('autoSwitchEnabledHelp').addEventListener('click', () => {
+  showToast('On: this device automatically switches pages when you change vessel - board the SRV, go on foot, and so on. Off: this device stays on whatever page it is already showing, even as you change vessel. Each paired device has its own copy of this setting.');
 });
 
 // Reset to default (ref/docs/reset-to-default.md). ONE confirm - not a
@@ -6547,7 +6598,34 @@ applyPairNamePlaceholder();
 // client the macro builder was told not to become.
 async function boot() {
   await initEditingDeviceBanner();
+  // A cold first launch (in particular a mobile WebView/Chrome-for-Android
+  // opening this page for the very first time) can report a stale or
+  // not-yet-settled innerWidth/innerHeight at the exact instant this runs -
+  // panelUrl() reads them synchronously, so the very first /api/panel
+  // request can carry the WRONG viewport, and the server then computes a
+  // cols/cellWidth for that wrong viewport. The text-fit-shrink pass in
+  // layoutGrid() sizes every label against that wrong cellWidth, so the
+  // visible symptom is button labels overlapping their neighbours even
+  // though the grid cells themselves are placed correctly. A real
+  // rotation self-corrects today because resize/orientationchange re-fetch
+  // with a genuinely current viewport - this is that same correction,
+  // applied automatically instead of waiting on the commander to rotate
+  // the device. Two rAFs is the standard, minimal-cost way to guarantee at
+  // least one full layout/paint cycle has completed before trusting
+  // innerWidth/innerHeight.
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   await loadPanel();
+  // Second line of defense: even after the double-rAF wait above, this
+  // cannot be proven sufficient on every real device (this codebase has no
+  // way to reproduce the actual mobile-browser viewport race). One
+  // automatic follow-up re-fetch, reusing the exact same scheduleReload
+  // path a real rotation already triggers, gives the page one more chance
+  // to correct itself with no action from the commander. Deliberately a
+  // SINGLE follow-up, not a loop - scheduleReload's own debounce means this
+  // is a harmless no-op if the first read was already correct, and looping
+  // it would risk fighting a commander who genuinely resizes/rotates during
+  // this window.
+  scheduleReload(400);
   if (location.hash === '#macros' && !el('panelScreen').classList.contains('hidden')) {
     el('settingsSheet').classList.remove('hidden');
     loadTheme();

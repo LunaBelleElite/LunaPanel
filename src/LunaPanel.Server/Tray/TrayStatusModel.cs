@@ -55,7 +55,7 @@ public static class TrayStatusModelBuilder
         {
             FoundRow("Elite install found", discovery.EliteInstallations.Count > 0),
             FoundRow("Bindings found", discovery.Bindings.LatestBindsFilePath is not null),
-            FoundRow("EDHM theme found", discovery.Edhm.SettingsFound),
+            FoundRow("EDHM theme found", discovery.Edhm.HasResolvableTheme),
             new TrayStatusRow("Paired devices", pairedDeviceCount.ToString()),
         };
 

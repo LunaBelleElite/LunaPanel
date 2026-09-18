@@ -38,6 +38,7 @@ public class LiveThemeResolverTests
         EdhmSettingsJsonPath: @"C:\fake\NoEdhm\Settings.json",
         EnvironmentVariables: new Dictionary<string, string>(),
         LocalAppData: @"C:\fake\LocalAppData",
+        IsDevBuild: false,
         GraphicsConfigurationOverridePath: overridePath);
 
     private static PathDiscoveryResult DiscoveryWithEdhm(string? activeInstance, IReadOnlyList<EdhmEditionData> editions) => new(

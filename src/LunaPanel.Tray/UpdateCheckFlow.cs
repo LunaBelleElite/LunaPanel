@@ -26,10 +26,12 @@ namespace LunaPanel.Tray;
 /// first decides whether the relaunch has anything to relaunch.
 ///
 /// <b>Nothing installs without an explicit yes.</b> One confirmation, and
-/// after it the flow is completely silent by design (no installer UI, no
-/// progress, no second prompt) - which is exactly why
-/// <see cref="LastLaunchedVersionStore"/> exists to say so on the next
-/// launch.
+/// after it the only thing shown is Windows Installer's own minimal
+/// <c>/passive</c> progress bar - no buttons, no second prompt, nothing that
+/// needs or accepts input - which is exactly why
+/// <see cref="LastLaunchedVersionStore"/> still exists to say so on the next
+/// launch: a progress bar during install is not a confirmation that the
+/// update happened.
 /// </summary>
 internal sealed class UpdateCheckFlow
 {
@@ -150,11 +152,16 @@ internal sealed class UpdateCheckFlow
     /// Hands the downloaded MSI to Windows Installer and returns
     /// immediately.
     ///
-    /// <c>/quiet</c> is the confirmed design (no installer UI at all),
+    /// <c>/passive</c> (confirmed design, replacing an earlier <c>/quiet</c>
+    /// choice) shows Windows Installer's own minimal progress UI - a plain
+    /// progress bar, no buttons, nothing that requires or accepts user
+    /// interaction, and nothing that can be dismissed or block the install -
+    /// closing the gap where a fully silent <c>/quiet</c> install looked
+    /// exactly like a hung tray icon for the 15-30 seconds it ran.
     /// <c>/norestart</c> because nothing this installs can need a reboot and
-    /// a silent install is the last place a machine should decide to restart
-    /// itself. <c>msiexec</c> is a separate process, so it survives this one
-    /// being terminated moments later by the installer's own
+    /// this is the last place a machine should decide to restart itself.
+    /// <c>msiexec</c> is a separate process, so it survives this one being
+    /// terminated moments later by the installer's own
     /// <c>util:CloseApplication</c> - which is the whole reason this method
     /// can simply return.
     /// </summary>
@@ -162,8 +169,8 @@ internal sealed class UpdateCheckFlow
     {
         try
         {
-            _log.Info(LogCategory, "Starting the silent update install", installerPath);
-            Process.Start(new ProcessStartInfo("msiexec.exe", $"/i \"{installerPath}\" /quiet /norestart")
+            _log.Info(LogCategory, "Starting the update install", installerPath);
+            Process.Start(new ProcessStartInfo("msiexec.exe", $"/i \"{installerPath}\" /passive /norestart")
             {
                 UseShellExecute = true,
             });

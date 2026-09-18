@@ -21,13 +21,33 @@ public static class RealServerEnvironment
 {
     public static ServerHostOptions Build()
     {
+        // This project is Windows-only (Steam's registry-recorded install
+        // path below, and the Win32 SendInput injector ServerHostBuilder.Build
+        // constructs later) but deliberately targets net10.0, not
+        // net10.0-windows (same reasoning as Win32KeyInjector's own
+        // [SupportedOSPlatform] split - see ref/docs/injection.md). This
+        // early-exit guard is what lets this method call
+        // Win32SteamRegistryLookup below without a CA1416 warning.
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("LunaPanel.Server requires Windows (Steam/EDHM discovery, Win32 SendInput).");
+        }
+
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        // The ONE signal for which root LunaPanelDirectories.Resolve uses
+        // (see DevBuildDetector's own remarks) - read once here and reused
+        // for both the early port-settings read below and the
+        // PathDiscoveryEnvironment this method returns, so both agree on
+        // the same directories PathDiscoveryService.Discover will use later,
+        // exactly as they did before this field existed.
+        var isDevBuild = DevBuildDetector.IsDevBuild();
 
         // The persisted port a commander chose via the tray's Ports dialog
         // (PortSettingsForm, LunaPanel.Tray) - read with a no-op log, since
         // the real diagnostics pipeline is not wired up until after this
         // method returns a directory/redactor for it to be built from.
-        var portSettingsDirectory = LunaPanelDirectories.Resolve(localAppData).LayoutsDirectory;
+        var portSettingsDirectory = LunaPanelDirectories.Resolve(localAppData, isDevBuild).LayoutsDirectory;
         var persistedPortSettings = new PortSettingsStore(portSettingsDirectory, new NoOpDiagnosticLog()).Load();
 
         // A commander's manual fallback for Elite/EDHM discovery (the Tray
@@ -52,7 +72,11 @@ public static class RealServerEnvironment
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
 
-        var steamRoots = SteamInstallDiscovery.GetCandidateSteamRoots(programFilesX86, programFiles);
+        var steamRoots = SteamInstallDiscovery.GetCandidateSteamRoots(
+            programFilesX86,
+            programFiles,
+            Win32SteamRegistryLookup.ReadSteamPathFromCurrentUserRegistry,
+            Win32SteamRegistryLookup.ReadInstallPathFromLocalMachineRegistry);
         var epicManifestsDirectory = Path.Combine(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests");
         var bindingsDirectory = Path.Combine(localAppData, "Frontier Developments", "Elite Dangerous", "Options", "Bindings");
         var edhmSettingsJsonPath = pathOverrides.EdhmSettingsJsonPath
@@ -98,6 +122,7 @@ public static class RealServerEnvironment
             EdhmSettingsJsonPath: edhmSettingsJsonPath,
             EnvironmentVariables: environmentVariables,
             LocalAppData: localAppData,
+            IsDevBuild: isDevBuild,
             GraphicsConfigurationOverridePath: graphicsConfigurationOverridePath,
             StatusJsonDirectory: statusJsonDirectory,
             EliteInstallPathOverride: pathOverrides.EliteInstallPath);

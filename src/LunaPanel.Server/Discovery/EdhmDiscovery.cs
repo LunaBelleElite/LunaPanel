@@ -14,7 +14,35 @@ public sealed record EdhmDiscoveryResult(
     bool SettingsFound,
     string? UserDataFolder,
     string? ActiveInstance,
-    IReadOnlyList<EdhmEditionData> Editions);
+    IReadOnlyList<EdhmEditionData> Editions)
+{
+    /// <summary>
+    /// Whether a theme is actually resolvable - distinct from
+    /// <see cref="SettingsFound"/>, which only means EDHM's fixed
+    /// install-time bootstrap <c>Settings.json</c> exists and parses. That
+    /// can be true with <see cref="UserDataFolder"/> unresolved, both
+    /// edition folders missing, or every edition present but empty - none of
+    /// which give the panel anything to actually read a HUD colour from.
+    /// This is the property both user-facing "found" indicators
+    /// (<c>TrayStatusModel</c>'s "EDHM theme found" row and
+    /// <c>AboutForm.CurrentEdhmLabel</c>) should report, so "found" only
+    /// ever means a theme could actually be resolved from it.
+    /// </summary>
+    public bool HasResolvableTheme => Editions.Any(edition => edition.ThemeSettingsJsonPath is not null || edition.XmlProfileIniPath is not null);
+
+    /// <summary>
+    /// The one edition <see cref="Theme.LiveThemeResolver"/> reads and
+    /// <see cref="Theme.ThemeFileWatcher"/> watches - a single shared
+    /// selection so the two can never disagree about which folder is "the
+    /// active" one. Prefers the edition named by <see cref="ActiveInstance"/>;
+    /// falls back to the first discovered edition (there are only ever two,
+    /// <c>ODYSS</c>/<c>HORIZ</c>) when <see cref="ActiveInstance"/> names
+    /// none of them, or names none at all.
+    /// </summary>
+    public EdhmEditionData? SelectActiveEdition() =>
+        Editions.FirstOrDefault(e => string.Equals(e.EditionFolderName, ActiveInstance, StringComparison.OrdinalIgnoreCase))
+        ?? Editions.FirstOrDefault();
+}
 
 /// <summary>
 /// Finds EDHM-UI-V3's own data, if the mod is installed at all - absent is a

@@ -627,6 +627,35 @@ public class PanelClientEndpointTests
         Assert.DoesNotContain(":hover", html, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The per-device auto-switch toggle - relocated here from the tray's
+    /// native Devices window (the commander has no reason to expect a
+    /// setting for THIS device to live in a window on the PC they aren't
+    /// looking at). Same shape as <see cref="BuildPage_HasAMergeExpandToggle_WiredToTheRealApiPanelSettingsRoute"/>.
+    /// </summary>
+    [Fact]
+    public void BuildPage_HasAnAutoSwitchEnabledToggle_WiredToTheRealApiPanelSettingsRoute()
+    {
+        var html = PanelClientEndpoint.BuildPage();
+
+        Assert.Contains("id=\"autoSwitchEnabledToggle\"", html, StringComparison.Ordinal);
+        Assert.Contains($"'{ApiPaths.PanelSettings}'", html, StringComparison.Ordinal);
+        Assert.Contains("autoSwitchEnabled", html, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Same tap-not-hover discipline as <see cref="BuildPage_MergeExpandHelp_IsTapToOpen_NeverHover"/>.
+    /// </summary>
+    [Fact]
+    public void BuildPage_AutoSwitchEnabledHelp_IsTapToOpen_NeverHover()
+    {
+        var html = PanelClientEndpoint.BuildPage();
+
+        Assert.Contains("id=\"autoSwitchEnabledHelp\"", html, StringComparison.Ordinal);
+        Assert.Contains("autoSwitchEnabledHelp').addEventListener('click'", html, StringComparison.Ordinal);
+        Assert.DoesNotContain(":hover", html, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void BuildPage_SubstitutesTheTemplatePickerRouteConstants_AndLeavesNoPlaceholderBehind()
     {

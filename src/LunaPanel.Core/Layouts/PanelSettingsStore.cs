@@ -55,7 +55,17 @@ public sealed class PanelSettingsStore
                     showMacroStepResults = false;
                 }
 
-                return new PanelSettings(mergeExpand, showMacroStepResults);
+                // Deliberately true on absence, matching PanelSettings.Default -
+                // not copied from the two fields above, whose own local
+                // defaults here are a known, pre-existing inconsistency with
+                // Default that this new field does not repeat.
+                var autoSwitchEnabled = true;
+                if (document.RootElement.TryGetProperty("autoSwitchEnabled", out var autoSwitchElement) && autoSwitchElement.ValueKind == JsonValueKind.False)
+                {
+                    autoSwitchEnabled = false;
+                }
+
+                return new PanelSettings(mergeExpand, showMacroStepResults, autoSwitchEnabled);
             }
             catch (JsonException ex)
             {
@@ -77,6 +87,7 @@ public sealed class PanelSettingsStore
                 writer.WriteStartObject();
                 writer.WriteBoolean("mergeExpand", settings.MergeExpand);
                 writer.WriteBoolean("showMacroStepResults", settings.ShowMacroStepResults);
+                writer.WriteBoolean("autoSwitchEnabled", settings.AutoSwitchEnabled);
                 writer.WriteEndObject();
             }
 
@@ -85,7 +96,7 @@ public sealed class PanelSettingsStore
             File.WriteAllBytes(tempPath, stream.ToArray());
             File.Move(tempPath, mainPath, overwrite: true);
 
-            _log.Info(LogCategory, "Saved panel settings", $"deviceId={deviceId}, mergeExpand={settings.MergeExpand}, showMacroStepResults={settings.ShowMacroStepResults}");
+            _log.Info(LogCategory, "Saved panel settings", $"deviceId={deviceId}, mergeExpand={settings.MergeExpand}, showMacroStepResults={settings.ShowMacroStepResults}, autoSwitchEnabled={settings.AutoSwitchEnabled}");
         }
     }
 
