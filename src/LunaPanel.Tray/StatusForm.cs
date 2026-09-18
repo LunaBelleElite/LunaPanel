@@ -60,6 +60,32 @@ internal sealed class StatusForm : Form
     private readonly Color _background;
     private readonly Color _primaryText;
 
+    /// <summary>
+    /// One shared ToolTip for the whole window, same pattern as
+    /// <see cref="PortSettingsForm"/>/<see cref="AboutForm"/> - a status row
+    /// like "Bindings found: No" tells a commander THAT something is
+    /// missing but not WHAT it means or where to fix it, and the button
+    /// strip's own labels ("Ports", "Macro timing") don't say what they'll
+    /// open either.
+    /// </summary>
+    private readonly ToolTip _tooltips = new();
+
+    /// <summary>
+    /// Explains what a status row actually means and, where there's an
+    /// obvious next step, points at it - keyed on
+    /// <see cref="TrayStatusRow.Label"/> exactly as
+    /// <c>TrayStatusModelBuilder.Build</c> writes it. A label with no entry
+    /// here (a future row this dictionary hasn't caught up with) simply gets
+    /// no tooltip rather than a wrong or stale one.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> RowTooltips = new Dictionary<string, string>
+    {
+        ["Elite install found"] = "Whether LunaPanel found your Elite Dangerous install automatically. If not, use the tray's About window to point it at the right folder.",
+        ["Bindings found"] = "Whether LunaPanel found your Elite Dangerous key bindings file - this is what lets buttons follow your own keybindings instead of a fixed default.",
+        ["EDHM theme found"] = "Whether LunaPanel found EDHM-UI's settings, so the panel can match your HUD's own colours. If you don't use EDHM-UI, this stays \"Not found\" and that's fine - the panel falls back to Elite's own orange, or whatever colour you pick yourself.",
+        ["Paired devices"] = "How many phones or tablets are currently paired to this PC.",
+    };
+
     public StatusForm(TrayStatusModel model, int hostAccessPort, StatusWindowPositionStore positionStore, Action<TrayAction> onActionClicked)
     {
         _onActionClicked = onActionClicked;
@@ -134,18 +160,23 @@ internal sealed class StatusForm : Form
     /// clear the selection after the fact. Focus lands on "Add a device"
     /// instead, which is the thing to press.
     /// </summary>
-    private TextBox BuildUrlBox(string url) => new()
+    private TextBox BuildUrlBox(string url)
     {
-        Text = url,
-        ReadOnly = true,
-        TabStop = false,
-        Dock = DockStyle.Top,
-        Height = 26,
-        BorderStyle = BorderStyle.None,
-        BackColor = _background,
-        ForeColor = ColorTranslator.FromHtml(TrayTheme.LinkText),
-        Font = new Font("Segoe UI", 9F),
-    };
+        var box = new TextBox
+        {
+            Text = url,
+            ReadOnly = true,
+            TabStop = false,
+            Dock = DockStyle.Top,
+            Height = 26,
+            BorderStyle = BorderStyle.None,
+            BackColor = _background,
+            ForeColor = ColorTranslator.FromHtml(TrayTheme.LinkText),
+            Font = new Font("Segoe UI", 9F),
+        };
+        _tooltips.SetToolTip(box, "Type this address into your phone or tablet's browser to open the panel.");
+        return box;
+    }
 
     /// <summary>
     /// <b>DPI/font-dependent row squish, fixed here (2026-09-15).</b> Each
@@ -178,23 +209,31 @@ internal sealed class StatusForm : Form
             var row = model.Rows[i];
             panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            panel.Controls.Add(new Label
+            var labelControl = new Label
             {
                 Text = row.Label,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ColorTranslator.FromHtml(TrayTheme.LabelText),
                 AutoSize = true,
-            }, column: 0, row: i);
-
-            panel.Controls.Add(new Label
+            };
+            var valueControl = new Label
             {
                 Text = row.Value,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleRight,
                 ForeColor = ColorTranslator.FromHtml(TrayTheme.ColorFor(row.State)),
                 AutoSize = true,
-            }, column: 1, row: i);
+            };
+
+            if (RowTooltips.TryGetValue(row.Label, out var tooltip))
+            {
+                _tooltips.SetToolTip(labelControl, tooltip);
+                _tooltips.SetToolTip(valueControl, tooltip);
+            }
+
+            panel.Controls.Add(labelControl, column: 0, row: i);
+            panel.Controls.Add(valueControl, column: 1, row: i);
         }
 
         return panel;
@@ -335,8 +374,31 @@ internal sealed class StatusForm : Form
         }
 
         control.Click += (_, _) => _onActionClicked(button.Action);
+        if (ButtonTooltips.TryGetValue(button.Action, out var tooltip))
+        {
+            _tooltips.SetToolTip(control, tooltip);
+        }
         return control;
     }
+
+    /// <summary>
+    /// Keyed on <see cref="TrayAction"/> rather than the button's own label
+    /// text, so a future label wording change can't silently disconnect a
+    /// tooltip from the button it describes.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<TrayAction, string> ButtonTooltips = new Dictionary<TrayAction, string>
+    {
+        [TrayAction.AddDevice] = "Pair a new phone or tablet.",
+        [TrayAction.Devices] = "See every paired device, rename or forget one, or edit one's layout live from here.",
+        [TrayAction.MacroBuilder] = "Build or edit a macro - a sequence of steps one button can run.",
+        [TrayAction.Transfer] = "Save a panel (or a single macro) to a file to share it, or load one back in.",
+        [TrayAction.MacroTiming] = "Tune how long a key is held and the gap between presses, if a button isn't registering reliably.",
+        [TrayAction.EditLivePanels] = "Edit a paired device's layout live from this PC's browser.",
+        [TrayAction.Ports] = "Change which network port LunaPanel uses.",
+        [TrayAction.About] = "See the running version, open the logs folder, or point LunaPanel at your Elite Dangerous install/EDHM-UI settings by hand.",
+        [TrayAction.CheckForUpdates] = "Check whether a newer version of LunaPanel is available.",
+        [TrayAction.Quit] = "Close LunaPanel completely.",
+    };
 
     protected override void OnHandleCreated(EventArgs e)
     {

@@ -92,30 +92,45 @@ internal sealed class AboutForm : Form
         // text is shorter.
         var actionButtonSize = MeasureButtonSize(Font, "Open", "Select…");
 
-        content.Controls.Add(BuildVersionRow(primaryText, labelText));
+        // One shared ToolTip component, same pattern as PortSettingsForm -
+        // every row's caption, value, and button gets one, so a commander who
+        // isn't sure what a row is for (or what "Select…" will ask them to
+        // pick) can hover rather than guess.
+        var tooltips = new ToolTip();
+
+        content.Controls.Add(BuildVersionRow(primaryText, labelText, tooltips));
         content.Controls.Add(BuildRow(
             "Logs folder",
             _layout.LogsDirectory,
+            "Where LunaPanel writes its diagnostic logs, one file per day. Attach the relevant one if you're reporting a problem.",
             primaryText,
             labelText,
             "Open",
+            "Open this folder in File Explorer.",
             actionButtonSize,
+            tooltips,
             (_, _) => OpenLogsFolder()));
         content.Controls.Add(BuildRow(
             "Elite Dangerous",
             CurrentEliteLabel(),
+            "The Elite Dangerous install LunaPanel found automatically. This is where it reads your keybindings from.",
             primaryText,
             labelText,
             "Select…",
+            "Point LunaPanel at your Elite Dangerous install by hand, for when it can't find it (or found the wrong one) on its own.",
             actionButtonSize,
+            tooltips,
             (_, _) => OnSelectEliteInstall()));
         content.Controls.Add(BuildRow(
             "EDHM",
             CurrentEdhmLabel(),
+            "The EDHM-UI settings file LunaPanel uses to match your panel's colours to your HUD.",
             primaryText,
             labelText,
             "Select…",
+            "Point LunaPanel at EDHM-UI's Settings.json by hand, for when it can't find it on its own.",
             actionButtonSize,
+            tooltips,
             (_, _) => OnSelectEdhmSettingsFile()));
 
         var closeButton = new RoundedButton
@@ -162,7 +177,7 @@ internal sealed class AboutForm : Form
         ClientSize = new Size(ClientSize.Width, neededHeight);
     }
 
-    private Control BuildVersionRow(Color primaryText, Color labelText)
+    private Control BuildVersionRow(Color primaryText, Color labelText, ToolTip tooltips)
     {
         var label = new Label
         {
@@ -178,6 +193,9 @@ internal sealed class AboutForm : Form
             Text = CurrentVersion(),
             Margin = new Padding(0, 0, 0, 12),
         };
+        var versionTooltip = "The LunaPanel version you're currently running.";
+        tooltips.SetToolTip(label, versionTooltip);
+        tooltips.SetToolTip(value, versionTooltip);
 
         var row = new FlowLayoutPanel
         {
@@ -220,10 +238,13 @@ internal sealed class AboutForm : Form
     private static Control BuildRow(
         string caption,
         string valueText,
+        string rowTooltip,
         Color primaryText,
         Color labelText,
         string buttonText,
+        string buttonTooltip,
         Size buttonSize,
+        ToolTip tooltips,
         EventHandler onClick)
     {
         var captionLabel = new Label
@@ -233,6 +254,7 @@ internal sealed class AboutForm : Form
             Text = caption,
             Margin = new Padding(0, 0, 0, 0),
         };
+        tooltips.SetToolTip(captionLabel, rowTooltip);
 
         var valueLabel = new Label
         {
@@ -242,6 +264,7 @@ internal sealed class AboutForm : Form
             Text = valueText,
             Margin = new Padding(0, 0, 12, 0),
         };
+        tooltips.SetToolTip(valueLabel, rowTooltip);
 
         var button = new RoundedButton
         {
@@ -255,6 +278,7 @@ internal sealed class AboutForm : Form
         };
         button.Size = buttonSize;
         button.Click += onClick;
+        tooltips.SetToolTip(button, buttonTooltip);
 
         var valueRow = new FlowLayoutPanel
         {
