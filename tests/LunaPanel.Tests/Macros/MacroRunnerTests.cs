@@ -2895,9 +2895,24 @@ public class MacroRunnerTests
     /// The whole point of the feature, against the real shipped file: landed
     /// on a planet surface rather than docked, the macro takes the OTHER arm
     /// and presses a completely different sequence - open the ship's own
-    /// radar panel, one Down, confirm. That sequence was confirmed directly
-    /// by the commander in-game on 2026-09-17; it is not derived from
-    /// anything.
+    /// radar panel, one Right, confirm.
+    ///
+    /// [2026-09-18: two bugs fixed here, both real, user-reported and
+    /// diagnosed live. First, the navigation key was wrong - the user's own
+    /// confirmed manual sequence ("3, D, space") and their live binds file
+    /// (`Key_D` = `UI_Right`) showed the arm was pressing `UI_Down` where it
+    /// needed `UI_Right`. Second, the closing confirm was a bare
+    /// unconditional `press`, the same silent-arm shape already diagnosed
+    /// and fixed for `srv-launch` above: a real log showed this step
+    /// reporting "Succeeded" while a `GuiFocus:NoFocus` check for a
+    /// different macro ~15s later still found a menu open, proving the
+    /// confirm never actually registered in-game. It is now a `pressUntil`
+    /// gated on the real `Disembark` journal event, same shape as
+    /// `srv-launch`'s `LaunchSRV` gate. Known, accepted scope limit:
+    /// `condJournal` gates on the event name only, not on the event's own
+    /// fields - `Disembark` fires for any disembark, ship or SRV, station or
+    /// surface. For this macro's single-avatar flow that's sufficient;
+    /// field-level filtering would be new engine work, out of scope here.]
     ///
     /// Asserted key by key, in order, rather than by count: a count alone
     /// would pass for the docked arm's three Downs plus a Select too.
@@ -2911,7 +2926,17 @@ public class MacroRunnerTests
         Assert.Equal(5, branch.Else.Count);
         Assert.Equal(new[] { "Landed", "GuiFocus:NoFocus" }, Assert.IsType<RequireStep>(branch.Else[0]).ConditionTokens);
         Assert.Equal("FocusRadarPanel", Assert.IsType<PressStep>(branch.Else[1]).Action);
-        Assert.Equal(1, Assert.IsType<PressStep>(branch.Else[2]).Repeat);
+        var rightStep = Assert.IsType<PressStep>(branch.Else[2]);
+        Assert.Equal("UI_Right", rightStep.Action);
+        Assert.Equal(1, rightStep.Repeat);
+
+        var selectStep = Assert.IsType<PressUntilStep>(branch.Else[4]);
+        Assert.Equal("UI_Select", selectStep.Action);
+        Assert.Null(selectStep.Conditions);
+        Assert.NotNull(selectStep.JournalCondition);
+        Assert.Equal("Disembark", selectStep.JournalCondition!.EventName);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), selectStep.Timeout);
+        Assert.Equal(3, selectStep.MaxAttempts);
 
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         var injector = new RecordingKeyInjector(clock);
@@ -2920,26 +2945,36 @@ public class MacroRunnerTests
         // StatusVocabulary.FlagsConditions, not assumed. Docked (bit 0) is
         // therefore clear, and nothing is focused.
         store.UpdateSnapshot(new StatusSnapshot(2u, 0u, 0, GameRunning: true, SignedIn: true));
+        var journal = new JournalStateStore();
         var log = new DiagnosticRingBuffer(64);
-        var runner = new MacroRunner(injector, store, new JournalStateStore(), new PanelTabTracker(), clock, log);
-        var bindings = BuildBindings(("UI_Down", "Key_S"), ("UI_Select", "Key_Space"), ("FocusRadarPanel", "Key_4"));
+        var runner = new MacroRunner(injector, store, journal, new PanelTabTracker(), clock, log);
+        var bindings = BuildBindings(("UI_Right", "Key_D"), ("UI_Select", "Key_Space"), ("FocusRadarPanel", "Key_3"));
 
         var runTask = runner.RunAsync(macro, bindings);
 
         await PumpAsync(clock, MacroTimingDefaults.DefaultHoldDuration); // FocusRadarPanel
-        await PumpAsync(clock, MacroTimingDefaults.DefaultHoldDuration); // UI_Down
+        await PumpAsync(clock, MacroTimingDefaults.DefaultHoldDuration); // UI_Right
         await PumpAsync(clock, TimeSpan.FromMilliseconds(150));          // wait
-        await PumpAsync(clock, MacroTimingDefaults.DefaultHoldDuration); // UI_Select
+        await PumpAsync(clock, MacroTimingDefaults.DefaultHoldDuration); // Select (pressUntil, 1st attempt)
+
+        // No trailing step follows the pressUntil in this arm (unlike
+        // srv-launch's closing FocusRadarPanel), so there is no further
+        // CreateTimer call for NextArmAsync to wait on - awaiting it here
+        // would spin forever since the arm generation never advances again.
+        // Recording the event and waiting on the run task directly is the
+        // same pattern PressUntilStep_JournalGate_SucceedsAsSoonAsTheNamedEventArrives_ExactlyOneInjection
+        // above uses for a journal gate with nothing after it.
+        journal.Record(new JournalEvent("Disembark", null, new Dictionary<string, string>()));
 
         Assert.Equal(MacroRunOutcome.Success, (await runTask.WaitAsync(RunHangGuard)).Outcome);
 
-        Scancodes.TryGet("Key_4", out var radarKey);
-        Scancodes.TryGet("Key_S", out var downKey);
+        Scancodes.TryGet("Key_3", out var radarKey);
+        Scancodes.TryGet("Key_D", out var rightKey);
         Scancodes.TryGet("Key_Space", out var selectKey);
 
-        Assert.Equal(6, injector.Events.Count); // (down,up) x 3
+        Assert.Equal(6, injector.Events.Count); // (down,up) x 3, confirm arrived on the 1st attempt
         Assert.Equal(
-            new[] { radarKey.ScanCode, downKey.ScanCode, selectKey.ScanCode },
+            new[] { radarKey.ScanCode, rightKey.ScanCode, selectKey.ScanCode },
             injector.Events.Where(e => e.IsDown).Select(e => e.Key.ScanCode));
 
         // No warning: Landed and GuiFocus:NoFocus both hold, so the arm's

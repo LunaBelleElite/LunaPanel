@@ -195,19 +195,34 @@ internal sealed class AddDeviceForm : Form
         _countdownLabel = new Label
         {
             Dock = DockStyle.Bottom,
-            Height = 24,
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = ColorTranslator.FromHtml(TrayTheme.LabelText),
             Font = new Font("Segoe UI", 9F),
         };
 
+        // Measured against ExpiredCaption specifically, not the shorter
+        // "Expires in m:ss" text this label starts with - ExpiredCaption is
+        // the longer of the two and can wrap to two lines at this width, so
+        // sizing for the short text (as a prior version of this label did,
+        // with a hardcoded Height=24) clips the second line the instant the
+        // countdown reaches zero. Same "measure the real text, don't guess
+        // a constant" fix already applied to the Instruction label above -
+        // see this class's own remarks on why that one was fixed first.
+        const int countdownPanelHorizontalPadding = 24;
+        var countdownLabelMeasured = TextRenderer.MeasureText(
+            ExpiredCaption,
+            _countdownLabel.Font,
+            new Size(Width - countdownPanelHorizontalPadding * 2, int.MaxValue),
+            TextFormatFlags.WordBreak);
+        _countdownLabel.Height = countdownLabelMeasured.Height + 8;
+
         var countdownPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 40,
+            Height = _countdownBarBackground.Height + 6 + _countdownLabel.Height,
             BackColor = background,
-            Padding = new Padding(24, 6, 24, 0),
+            Padding = new Padding(countdownPanelHorizontalPadding, 6, countdownPanelHorizontalPadding, 0),
         };
         // Added in this order (label, then bar) deliberately - within this
         // sub-panel the same "last added docks first" rule this form's own

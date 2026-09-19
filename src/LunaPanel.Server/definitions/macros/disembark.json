@@ -13,9 +13,9 @@
       "else": [
         { "require": ["Landed", "GuiFocus:NoFocus"] },
         { "press": "FocusRadarPanel", "repeat": 1 },
-        { "press": "UI_Down", "repeat": 1 },
+        { "press": "UI_Right", "repeat": 1 },
         { "wait": 150 },
-        { "press": "UI_Select", "repeat": 1 }
+        { "pressUntil": "UI_Select", "condJournal": "Disembark", "timeoutMs": 1500, "maxAttempts": 3 }
       ]
     }
   ]
