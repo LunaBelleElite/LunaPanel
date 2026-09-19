@@ -12,10 +12,10 @@
     (i.e. every project in the repo, including LunaPanel.Tests and
     LunaPanel.Probe - harmless for both, see the remark below) from
     CHANGELOG.md's own topmost "## ver-..." header - the single source of
-    truth this project already keeps current by hand (see the
-    versioning-scheme section of the repo root's CLAUDE.md) - rather than
-    hand-syncing a second copy that could drift. AboutForm (LunaPanel.Tray)
-    reads it back via FileVersionInfo.GetVersionInfo(...).ProductVersion.
+    truth this project already keeps current by hand (see that file's own
+    versioning-scheme section) - rather than hand-syncing a second copy
+    that could drift. AboutForm (LunaPanel.Tray) reads it back via
+    FileVersionInfo.GetVersionInfo(...).ProductVersion.
 
     LunaPanelVersionNumeric ALSO drives <FileVersion>/<AssemblyVersion> -
     the real Win32 version resource, distinct from the informational string

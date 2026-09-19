@@ -55,8 +55,8 @@ public class VersionComparerTests
 
     /// <summary>
     /// Ordering is numeric, not lexicographic - "10" sorts before "9" as
-    /// text, and the versioning scheme explicitly allows any number to climb
-    /// arbitrarily high (repo-root CLAUDE.md).
+    /// text, and this project's versioning scheme explicitly allows any
+    /// number to climb arbitrarily high.
     /// </summary>
     [Fact]
     public void IsNewer_ComparesNumerically_NotAsText()

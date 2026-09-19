@@ -3,7 +3,7 @@ namespace LunaPanel.Core.Updates;
 /// <summary>
 /// Compares two of this project's own version strings
 /// (<c>ver-A.B.C.D</c>, optionally with a trailing <c>-suffix</c> such as
-/// <c>-dev</c> - see the repo root's CLAUDE.md for the scheme).
+/// <c>-dev</c>).
 ///
 /// <b>The suffix is ignored, not ordered.</b> A published release's tag comes
 /// off <c>main</c> and never carries one; the build a commander is usually

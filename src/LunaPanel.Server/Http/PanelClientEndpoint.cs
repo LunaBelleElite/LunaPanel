@@ -912,9 +912,9 @@ public static class PanelClientEndpoint
      always, never behind a tap, and computed from the CONFIGURED timing
      read back from GET /api/macro-timing, never a constant. */
   .macroEstimate { font-size: 12px; color: var(--lp-dim); margin: 4px 0 0; line-height: 1.5; }
-  /* Notes, not refusals. Nothing on these screens blocks a save
-     (.claude-memory/never-gate-a-macro.md) - this is where a symptom is
-     named and then the commander decides. */
+  /* Notes, not refusals. Nothing on these screens blocks a save - a macro
+     is never gated on uncertainty - this is where a symptom is named and
+     then the commander decides. */
   .macroNote { font-size: 12px; color: var(--lp-text); margin: 8px 0 0; line-height: 1.5; }
 
   .macroField { margin: 12px 0; }

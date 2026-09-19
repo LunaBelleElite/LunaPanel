@@ -10,8 +10,7 @@ namespace LunaPanel.Tests.Updates;
 /// <see cref="HttpMessageHandler"/> returning canned bodies.
 ///
 /// <b>No test here touches the network.</b> That is a hard constraint of
-/// this project (repo-root CLAUDE.md, and the agent briefs that come off
-/// it): the suite must pass with no internet, no GitHub account, and no
+/// this project's own test discipline: the suite must pass with no internet, no GitHub account, and no
 /// rate-limit exposure. <see cref="CannedHandler"/> is the whole seam - the
 /// checker takes an <see cref="HttpClient"/> rather than building one, so
 /// production hands it a real one and this suite hands it one that answers

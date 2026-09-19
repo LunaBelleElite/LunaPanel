@@ -1006,9 +1006,8 @@ public class MacrosEndpointTests
     }
 
     /// <summary>
-    /// The never-gate rule at the save path
-    /// (<c>.claude-memory/never-gate-a-macro.md</c>): a macro that presses an
-    /// action bound to nothing, repeats it ten thousand times, waits an
+    /// A macro is never gated on uncertainty, at the save path: a macro
+    /// that presses an action bound to nothing, repeats it ten thousand times, waits an
     /// hour, and re-presses a contextual toggle is saved without argument.
     /// Every one of those is a thing a commander may legitimately want, and
     /// none of them is this endpoint's to refuse.

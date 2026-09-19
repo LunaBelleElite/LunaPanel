@@ -23,8 +23,7 @@ namespace LunaPanel.Server.Http;
 /// not a large <c>repeat</c>, not a <c>pressUntil</c> on a contextual
 /// toggle. A save is refused only when the content is not a macro at all
 /// (the grammar cannot read it) or when the request is asking for something
-/// that does not exist. Confidence is information to record, never a gate
-/// (<c>.claude-memory/never-gate-a-macro.md</c>).</item>
+/// that does not exist. Confidence is information to record, never a gate.</item>
 /// <item><b>Intent, never resolution.</b> What is stored is action names and
 /// condition tokens. The bound state and chord this type reports per step
 /// are <em>display</em>, recomputed from live bindings on every request via

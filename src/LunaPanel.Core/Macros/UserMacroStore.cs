@@ -147,9 +147,9 @@ public sealed class UserMacroStore
     /// one parser that checks it, and there is nothing further for this
     /// store to second-guess. <b>In particular it does not judge whether the
     /// macro will work</b> - an unbound action, a long <c>repeat</c>, a
-    /// contextual toggle pressed twice: all are the commander's to author
-    /// (<c>.claude-memory/never-gate-a-macro.md</c>, and
-    /// <c>ref/docs/macro-builder.md</c>'s question 4).
+    /// contextual toggle pressed twice: all are the commander's to author,
+    /// never gated on uncertainty (<c>ref/docs/macro-builder.md</c>'s
+    /// question 4).
     ///
     /// <paramref name="sourceMacroId"/>/<paramref name="sourceStepsHash"/>
     /// are the copy-to-edit provenance a fresh copy carries

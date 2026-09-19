@@ -225,9 +225,8 @@ public class UserMacroStoreTests
     }
 
     /// <summary>
-    /// The never-gate rule, at the storage layer
-    /// (<c>.claude-memory/never-gate-a-macro.md</c>): a macro whose action
-    /// is bound to nothing, whose <c>repeat</c> is enormous, and whose
+    /// A macro is never gated on uncertainty, at the storage layer: a macro
+    /// whose action is bound to nothing, whose <c>repeat</c> is enormous, and whose
     /// <c>pressUntil</c> re-presses a contextual toggle saves without
     /// argument. None of that is this store's to refuse; a degraded macro is
     /// reported as degraded at read time and refused at press time by

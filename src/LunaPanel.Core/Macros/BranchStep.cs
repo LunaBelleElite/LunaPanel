@@ -17,9 +17,9 @@ namespace LunaPanel.Core.Macros;
 /// <c>WARN</c> naming why. That is not a new rule invented here: it is
 /// exactly what <c>Condition</c>/<c>ConditionList</c> already do internally
 /// and what <c>MacroRunner.ExecuteRequire</c> already reports. Note this is
-/// NOT the never-gate-a-macro rule (<c>.claude-memory/never-gate-a-macro.md</c>)
-/// being broken - nothing is refused, and keys still fire; the macro simply
-/// takes the arm written for "not that state".
+/// NOT a macro being refused for uncertainty - a macro is never gated on
+/// what it doesn't know; nothing is refused, and keys still fire, the
+/// macro simply takes the arm written for "not that state".
 ///
 /// <b>Nesting is capped at one level</b> - <c>MacroDefinition.Parse</c>
 /// rejects a <c>branch</c> inside a <c>then</c>/<c>else</c> arm. Same cap,
