@@ -72,7 +72,7 @@ public class TrayStatusWindowActionsTests
         Assert.Equal(TrayMacroTiming.MenuLabel, buttons[4].Label);
         Assert.Equal(TrayEditLivePanels.MenuLabel, buttons[5].Label);
         Assert.Equal("Ports", buttons[6].Label);
-        Assert.Equal("About", buttons[7].Label);
+        Assert.Equal("General", buttons[7].Label);
         Assert.Equal("Check for updates", buttons[8].Label);
         Assert.Equal("Quit", buttons[9].Label);
     }

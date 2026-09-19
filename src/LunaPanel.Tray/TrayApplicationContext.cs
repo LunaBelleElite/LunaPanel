@@ -126,7 +126,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
         menu.Items.Add("Status", null, (_, _) => ShowStatusWindow());
         menu.Items.Add("Ports", null, (_, _) => Dispatch(TrayAction.Ports));
-        menu.Items.Add("About", null, (_, _) => Dispatch(TrayAction.About));
+        menu.Items.Add("General", null, (_, _) => Dispatch(TrayAction.About));
         menu.Items.Add("Check for updates", null, (_, _) => Dispatch(TrayAction.CheckForUpdates));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Dispatch(TrayAction.Quit));

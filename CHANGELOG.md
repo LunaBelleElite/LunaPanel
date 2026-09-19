@@ -17,4 +17,4 @@ Any number can climb arbitrarily high. When a higher-order number increments, ev
 
 (Full detail, including the "why," lives in `CLAUDE.md`. This section is not edited when entries below are added — only when the scheme itself changes.)
 
-## ver-1.4.1.1
+## ver-1.4.2.1

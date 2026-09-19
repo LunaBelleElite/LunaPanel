@@ -32,7 +32,31 @@
       files land or the old ones are removed. See util:CloseApplication's
       own comment below for the rest of this sequencing story.
     -->
-    <MajorUpgrade Schedule="afterInstallExecute" DowngradeErrorMessage="A newer version of LunaPanel is already installed." />
+    <!--
+      AllowSameVersionUpgrades="yes" (2026-09-18) - a second, real defect
+      found and fixed during the same pass as O45/O47. MajorUpgrade's actual
+      detection property compares only the first three fields of Version
+      (Major.Minor.Build), never the fourth - that is documented WiX/MSI
+      behaviour (MSI's own VersionNT-style comparison, which this project's
+      4th number was never part of). This project's own versioning scheme
+      bumps ONLY the 4th number for every small bugfix and doc-only change -
+      exactly the case this attribute exists for - so without it, any
+      upgrade whose first three numbers are unchanged is treated by MSI as
+      "the same product already installed"
+      and RemoveExistingProducts never fires: the old product registration
+      is never removed, files that changed only in a 4.th-number release can
+      be silently skipped by MSI's own "don't recopy an unchanged version"
+      rule, and repeated 4th-number-only installs accumulate as separate
+      product registrations in Add/Remove Programs instead of replacing one
+      another (measured on this machine: nine stray LunaPanel registrations
+      after a night of 4th-number test builds). AllowSameVersionUpgrades
+      widens MajorUpgrade's own detection to also treat an EXACT version
+      match as an upgrade to process (still never a lower one - that is
+      DowngradeErrorMessage's job, untouched), so RemoveExistingProducts and
+      the whole close/copy/relaunch sequence above run even when only the
+      4th number moved.
+    -->
+    <MajorUpgrade Schedule="afterInstallExecute" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of LunaPanel is already installed." />
 
     <MediaTemplate EmbedCab="yes" />
 
@@ -60,9 +84,27 @@
       <RegistryValue Root="HKCU" Key="Software\LunaBelleElite\LunaPanel" Name="installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
+    <!--
+      The installer's own tiny helper (installer/launcher/LunaPanel.Launcher.cs,
+      built by scripts/build-installer.sh with Windows' inbox csc.exe). It is
+      installed as a real file with a FIXED FileVersion, deliberately: Windows
+      Installer only overwrites a versioned file with a higher version, so
+      after the first install this file is never rewritten by an upgrade -
+      which is what makes it immune to the very "just-written file is still
+      held by a scanner" hold it exists to work around (see the launch action
+      below). The SAME exe also goes into the Binary table, because the wait
+      action below runs before InstallFiles, when this file may not be on disk
+      yet (a fresh install).
+    -->
+    <Component Id="Launcher" Directory="INSTALLFOLDER" Guid="8d3f6b2a-5c41-4e7a-9b0c-2f1e7d4a6c93">
+      <File Id="LunaPanelLauncherExe" Source="$(var.LauncherExe)" KeyPath="yes" />
+    </Component>
+    <Binary Id="LunaPanelLauncherBinary" SourceFile="$(var.LauncherExe)" />
+
     <Feature Id="Main" Title="LunaPanel" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="Launcher" />
     </Feature>
 
     <Icon Id="LunaPanelIcon" SourceFile="$(var.IconFile)" />
@@ -77,13 +119,32 @@
       relaunch sequencing of its own: the installer, not the app, owns
       closing the running copy.
 
-      TerminateProcess="0" with no CloseMessage is a plain TerminateProcess
-      at exit code 0, by the commander's own confirmed choice - LunaPanel is
-      a background utility with no unsaved state, so a graceful WM_CLOSE
-      round trip buys nothing and only adds a way for the close to be
-      ignored. RebootPrompt="no" because a file this installer replaces is
-      never in use by anything else once that process is gone; a silent
-      install is the last place a machine should decide to restart itself.
+      HOW THE CLOSE ACTUALLY HAPPENS NOW (2026-09-18). In every /passive or
+      silent install Windows Installer's Restart Manager asks the running
+      LunaPanel to exit at InstallValidate - long before this action - by
+      sending WM_QUERYENDSESSION/WM_ENDSESSION to its windows, then waits up
+      to 30 s for the process to be gone. Until 2026-09-18 LunaPanel ignored
+      that (measured: RmShutdown against the live tray returned
+      ERROR_FAIL_SHUTDOWN after 30.2 s), which is where the 30 s of dead time
+      in every self-update came from, and why every upgrade then fell
+      through to a hard TerminateProcess here. LunaPanel.Tray now answers
+      those messages by quitting (ShutdownRequestWindow), so on the normal
+      path the process is already gone, gracefully, before InstallInitialize.
+
+      EndSessionMessage="yes" + Timeout makes THIS action the same graceful
+      request for the cases Restart Manager sits out (a machine with a
+      pending reboot makes the service's RM session bail with error 350 -
+      seen on this very machine; MSIRESTARTMANAGERCONTROL=Disable; a full-UI
+      install): the Util CA sends the same two messages, waits up to Timeout
+      seconds for the process to exit, and only THEN falls back to
+      TerminateProcess="0" (exit code 0). Ten seconds because the app's own
+      quit stops Kestrel under a 5 s budget first. No CloseMessage: a WM_CLOSE
+      to the status window merely minimises it to the tray, and a WM_CLOSE to
+      the tray icon's window would destroy it.
+
+      RebootPrompt="no" because a file this installer replaces is never in
+      use by anything else once that process is gone; a silent install is
+      the last place a machine should decide to restart itself.
 
       Target is the process NAME, not a path - the running copy could have
       been started from anywhere (including a previous install location).
@@ -109,8 +170,55 @@
     -->
     <util:CloseApplication Id="CloseLunaPanelTray"
                            Target="LunaPanel.Tray.exe"
+                           EndSessionMessage="yes"
+                           Timeout="10"
                            TerminateProcess="0"
                            RebootPrompt="no" />
+
+    <!--
+      Belt to the braces above: when the close DID have to terminate (an old
+      LunaPanel that predates ShutdownRequestWindow, or a hung one), process
+      teardown outlives TerminateProcess by a few milliseconds, and in 2 of 18
+      instrumented upgrades the very next FileCopy hit "Info 1603: file is
+      being held in use", stalling Windows Installer ~50 s and returning 3010.
+      This deferred action runs the helper's wait mode between the close and
+      InstallFiles: poll, bounded at 10 s, until every .dll/.exe in the
+      install folder is openable. On a fresh install the folder does not exist
+      and it returns at once. From the Binary table (not the installed file)
+      because the file may not exist yet. Return="ignore": nothing here may
+      fail an install.
+    -->
+    <CustomAction Id="WaitForLunaPanelFilesToBeFree"
+                  BinaryRef="LunaPanelLauncherBinary"
+                  ExeCommand="wait &quot;[INSTALLFOLDER]LunaPanel.Tray.exe&quot;"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <!--
+      THE close that actually matters for speed (2026-09-18), run BEFORE
+      InstallValidate. Measured on this machine across every variant tried:
+      whenever LunaPanel.Tray.exe still holds its files when InstallValidate
+      runs, Windows Installer's own files-in-use handling sits ~30 s there -
+      with Restart Manager enabled (the default), with it disabled
+      (MSIRESTARTMANAGERCONTROL=Disable: 37 s), with MSIRMSHUTDOWN=1, and
+      regardless of how promptly the app answers a direct RmShutdown (99 ms).
+      That stall, not the close action or the file copy, was the "dead time"
+      of every self-update. The only thing that avoids it is the app being
+      gone before validation looks, so the helper's close mode runs here: the
+      same WM_QUERYENDSESSION/WM_ENDSESSION request to every window of every
+      running copy (which the tray answers by quitting), a bounded wait, and
+      termination only as the last resort. util:CloseApplication below stays
+      as the in-script backstop; on the normal path it finds nothing.
+      Immediate and impersonated, so it runs on the commander's desktop and
+      can reach the tray's windows. Return="ignore": nothing here may fail an
+      install.
+    -->
+    <CustomAction Id="CloseLunaPanelBeforeValidate"
+                  BinaryRef="LunaPanelLauncherBinary"
+                  ExeCommand="close &quot;[INSTALLFOLDER]LunaPanel.Tray.exe&quot;"
+                  Execute="immediate"
+                  Return="ignore" />
 
     <!--
       Always launch LunaPanel once an install finishes - the commander's
@@ -122,45 +230,38 @@
       "was this a self-update" would mean the installer having to be told,
       which is the fragile flag this design deliberately avoids.
 
-      Wix4ShellExec_$(sys.BUILDARCHSHORT) is the Util extension's own
-      ShellExecute custom action; it launches whatever WixShellExecTarget
-      holds. Confirmed against the installed WixToolset.Util.wixext 5.0.2
-      itself (its wixlib names exactly these: the property WixShellExecTarget
-      and the per-architecture action ids), not from memory of an older WiX.
+      Until 2026-09-18 this was the Util extension's Wix4ShellExec: a bare
+      ShellExecute of the tray, no wait, no retry, and Return="check" - so a
+      relaunch that failed would have failed the install itself. Twice on a
+      real machine that relaunch died within 130 ms of starting because a
+      just-written binary was still held open exclusively (ref/docs/updates.md,
+      "The post-install relaunch race"). The tray's own Program.Main recovers
+      from that for every dependency it loads but cannot for its own entry
+      assembly or apphost - only the launcher can, and this is it: the
+      helper's launch mode waits (bounded) until every binary in the folder
+      is openable, starts the tray, and watches it for 2 s; a process that
+      dies non-zero in that window is a load-time crash, so it waits and
+      starts a fresh one, three attempts at most. Run from the INSTALLED
+      file (FileRef, custom action type 18), which after the first install
+      is never rewritten - see the Launcher component's comment - so the
+      launcher itself is not one of the freshly-written files it is waiting
+      on. Return="ignore": a launch that still fails leaves the install
+      itself reported as the success it was.
 
       Condition="NOT Installed OR REINSTALL" would skip a major upgrade,
       whose new package is not yet "Installed" but whose old one is being
       removed in the same transaction - so the condition is written as the
       one thing that must never relaunch: an uninstall.
-
-      The target needs BOTH elements below, and each one is there for a
-      reason the build itself stated:
-
-      - The Property row, because the Util extension's wixlib carries a hard
-        reference to a Property named exactly "WixShellExecTarget", and a
-        SetProperty alone does not create one - without it the link fails
-        with WIX0094 "the identifier 'Property:WixShellExecTarget' could not
-        be found". Its value here is only a placeholder.
-      - The SetProperty, because a Property table value is a literal and is
-        never formatted: "[INSTALLFOLDER]LunaPanel.Tray.exe" authored as a
-        plain Property would reach the custom action with the brackets still
-        in it, and WiX warns WIX1077 on exactly that. SetProperty emits a
-        custom action that formats the value at install time, when
-        INSTALLFOLDER actually holds a path.
-
-      The custom action SetProperty emits is named "SetWixShellExecTarget"
-      (the property id with "Set" in front), which is what the launch action
-      below is sequenced after - so the target is formatted before anything
-      tries to launch it.
     -->
-    <Property Id="WixShellExecTarget" Value="LunaPanel.Tray.exe" />
-    <SetProperty Id="WixShellExecTarget"
-                 Value="[INSTALLFOLDER]LunaPanel.Tray.exe"
-                 After="InstallFinalize"
-                 Sequence="execute" />
-    <CustomActionRef Id="Wix4ShellExec_$(sys.BUILDARCHSHORT)" />
+    <CustomAction Id="LaunchLunaPanelAfterInstall"
+                  FileRef="LunaPanelLauncherExe"
+                  ExeCommand="launch &quot;[INSTALLFOLDER]LunaPanel.Tray.exe&quot;"
+                  Execute="immediate"
+                  Return="ignore" />
     <InstallExecuteSequence>
-      <Custom Action="Wix4ShellExec_$(sys.BUILDARCHSHORT)" After="SetWixShellExecTarget" Condition="NOT REMOVE" />
+      <Custom Action="CloseLunaPanelBeforeValidate" Before="InstallValidate" />
+      <Custom Action="WaitForLunaPanelFilesToBeFree" After="Wix4CloseApplications_$(sys.BUILDARCHSHORT)" />
+      <Custom Action="LaunchLunaPanelAfterInstall" After="InstallFinalize" Condition="NOT REMOVE" />
     </InstallExecuteSequence>
   </Package>
 </Wix>

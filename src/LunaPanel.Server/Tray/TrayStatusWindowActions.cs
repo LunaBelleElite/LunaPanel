@@ -118,7 +118,7 @@ public static class TrayStatusWindowActions
         // Same reasoning as Ports just above - a native WinForms dialog
         // (AboutForm, LunaPanel.Tray), not a loopback page, so no
         // hostAccessPort gate.
-        buttons.Add(new TrayActionButton(TrayAction.About, "About"));
+        buttons.Add(new TrayActionButton(TrayAction.About, "General"));
 
         // Same reasoning again, for a third reason on top of the other two:
         // this one reaches the internet rather than a loopback page, so the

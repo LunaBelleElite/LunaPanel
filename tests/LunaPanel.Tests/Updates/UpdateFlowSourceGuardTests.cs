@@ -165,31 +165,47 @@ public class UpdateFlowSourceGuardTests
         Assert.Contains("case TrayAction.CheckForUpdates:", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// [2026-09-18] The close is now graceful first: <c>EndSessionMessage</c>
+    /// sends the same <c>WM_QUERYENDSESSION</c>/<c>WM_ENDSESSION</c> pair
+    /// Restart Manager sends, which the tray answers by quitting
+    /// (<c>ShutdownRequestWindow</c>); <c>Timeout</c> bounds how long the
+    /// action waits for that exit before <c>TerminateProcess</c> - ten
+    /// seconds, because the app's own quit stops Kestrel under a 5 s budget
+    /// first. Losing either attribute silently reinstates the hard kill on
+    /// every upgrade, and with it the teardown race the wait action exists
+    /// for (<c>InstallerLauncherSourceGuardTests</c>).
+    /// </summary>
     [Fact]
-    public void PackageWxs_ClosesTheRunningLunaPanelByProcessName_ByTerminatingIt()
+    public void PackageWxs_ClosesTheRunningLunaPanelByProcessName_GracefullyFirst_ThenByTerminatingIt()
     {
         var source = PackageWxsSource();
 
         Assert.Contains("util:CloseApplication", source, StringComparison.Ordinal);
         Assert.Contains("Target=\"LunaPanel.Tray.exe\"", source, StringComparison.Ordinal);
+        Assert.Contains("EndSessionMessage=\"yes\"", source, StringComparison.Ordinal);
+        Assert.Contains("Timeout=\"10\"", source, StringComparison.Ordinal);
         Assert.Contains("TerminateProcess=\"0\"", source, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// The other half of the same bargain: having terminated LunaPanel, the
+    /// The other half of the same bargain: having closed LunaPanel, the
     /// installer must start it again, on every path that is not an
     /// uninstall. Without this the silent self-update would leave the
     /// commander with nothing running and no sign anything had happened.
+    ///
+    /// [2026-09-18] The launch is the installer's own helper now, not
+    /// <c>Wix4ShellExec</c> - see <c>InstallerLauncherSourceGuardTests</c>
+    /// for everything about the helper itself; this pin keeps only the
+    /// bargain: after <c>InstallFinalize</c>, never on an uninstall.
     /// </summary>
     [Fact]
     public void PackageWxs_LaunchesLunaPanelAfterInstallFinalize_OnEveryPathButUninstall()
     {
         var source = PackageWxsSource();
 
-        Assert.Contains("Wix4ShellExec_$(sys.BUILDARCHSHORT)", source, StringComparison.Ordinal);
-        Assert.Contains("WixShellExecTarget", source, StringComparison.Ordinal);
-        Assert.Contains("After=\"InstallFinalize\"", source, StringComparison.Ordinal);
-        Assert.Contains("Condition=\"NOT REMOVE\"", source, StringComparison.Ordinal);
+        Assert.Contains("<CustomAction Id=\"LaunchLunaPanelAfterInstall\"", source, StringComparison.Ordinal);
+        Assert.Contains("<Custom Action=\"LaunchLunaPanelAfterInstall\" After=\"InstallFinalize\" Condition=\"NOT REMOVE\" />", source, StringComparison.Ordinal);
     }
 
     /// <summary>
