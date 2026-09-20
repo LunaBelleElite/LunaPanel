@@ -37,6 +37,15 @@ public sealed class DiagnosticLogWriter : IDiagnosticLog
         Directory.CreateDirectory(_directory);
     }
 
+    /// <summary>
+    /// How long to wait before a single retry when a write or delete hits a
+    /// transient sharing violation (e.g. antivirus real-time scanning
+    /// briefly holding the freshly-written log file open). Long enough for
+    /// that kind of momentary lock to clear, short enough not to matter on
+    /// a background timer-driven write.
+    /// </summary>
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(20);
+
     public void Write(DiagnosticEvent diagnosticEvent)
     {
         var line = FormatLine(diagnosticEvent, _redactor);
@@ -45,8 +54,42 @@ public sealed class DiagnosticLogWriter : IDiagnosticLog
         {
             var now = _clock.GetUtcNow();
             var path = LogPathFor(now);
-            File.AppendAllText(path, line + "\n");
+            AppendWithRetry(path, line + "\n");
             PurgeOldFiles(now);
+        }
+    }
+
+    /// <summary>
+    /// Appends a line to the log file, tolerating a transient I/O failure
+    /// (e.g. the file being momentarily locked by another process) with one
+    /// retry after a short delay. A failed log write must never be able to
+    /// crash the process it is trying to describe - if both attempts fail,
+    /// the line is silently dropped rather than propagated.
+    /// </summary>
+    private static void AppendWithRetry(string path, string text)
+    {
+        try
+        {
+            File.AppendAllText(path, text);
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Likely a transient sharing violation (e.g. antivirus scanning
+            // the file we just wrote). Fall through to a single retry.
+        }
+
+        Thread.Sleep(RetryDelay);
+
+        try
+        {
+            File.AppendAllText(path, text);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Still locked/inaccessible after the retry - drop this one
+            // line. Do not introduce a secondary logging path here; that
+            // would be circular and risks looping the same failure.
         }
     }
 
@@ -94,7 +137,17 @@ public sealed class DiagnosticLogWriter : IDiagnosticLog
             if (DateTime.TryParseExact(datePart, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fileDate)
                 && fileDate < cutoff)
             {
-                File.Delete(file);
+                try
+                {
+                    File.Delete(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Locked or inaccessible right now - skip it. Purge is
+                    // not urgent; it gets another chance on the next
+                    // Write() call, and one stuck file must not abort
+                    // deletion of the others or crash the process.
+                }
             }
         }
     }

@@ -203,4 +203,87 @@ public class DiagnosticLogWriterTests
             Assert.True(seen.Add((thread, index)), $"Duplicate or corrupted line for thread={thread} index={index}");
         }
     }
+
+    [Fact]
+    public void Write_TargetFileLockedForEntireCall_DoesNotThrow_AndDropsTheLine()
+    {
+        var dir = NewTempDir();
+        var clock = new ManualTimeProvider { UtcNow = new DateTimeOffset(2026, 9, 5, 0, 0, 0, TimeSpan.Zero) };
+        var writer = new DiagnosticLogWriter(dir, clock, retentionDays: 30, NoOpRedactor);
+        var path = Path.Combine(dir, "lunapanel-20260905.log");
+
+        using (new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            var ex = Record.Exception(() =>
+                writer.Write(new DiagnosticEvent(clock.UtcNow, DiagnosticLevel.Info, "Server", "locked out")));
+
+            Assert.Null(ex);
+        }
+
+        // Both the immediate attempt and the retry happened while the file
+        // was held open the whole time, so the line must have been dropped
+        // rather than written.
+        Assert.DoesNotContain("locked out", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Write_TargetFileLockReleasedBeforeRetry_LineIsStillWritten()
+    {
+        var dir = NewTempDir();
+        var clock = new ManualTimeProvider { UtcNow = new DateTimeOffset(2026, 9, 5, 0, 0, 0, TimeSpan.Zero) };
+        var writer = new DiagnosticLogWriter(dir, clock, retentionDays: 30, NoOpRedactor);
+        var path = Path.Combine(dir, "lunapanel-20260905.log");
+
+        var releaseLock = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        var unlockThread = new Thread(() =>
+        {
+            // Released well inside the fix's retry delay, so the retry
+            // attempt (not the first, immediate attempt) is the one that
+            // succeeds.
+            Thread.Sleep(5);
+            releaseLock.Dispose();
+        });
+        unlockThread.Start();
+
+        writer.Write(new DiagnosticEvent(clock.UtcNow, DiagnosticLevel.Info, "Server", "recovered"));
+        unlockThread.Join();
+
+        Assert.Contains("recovered", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void PurgeOldFiles_LockedStaleFile_IsSkippedButOtherStaleFilesStillDeleted_AndWriteSucceeds()
+    {
+        var dir = NewTempDir();
+        var clock = new ManualTimeProvider { UtcNow = new DateTimeOffset(2026, 9, 10, 0, 0, 0, TimeSpan.Zero) };
+        var writer = new DiagnosticLogWriter(dir, clock, retentionDays: 3, NoOpRedactor);
+
+        // With retentionDays = 3 and "today" = 2026-09-10, the cutoff is
+        // 2026-09-08: anything strictly older is eligible for deletion.
+        var deletableUnlocked1 = Path.Combine(dir, "lunapanel-20260905.log");
+        var deletableLocked = Path.Combine(dir, "lunapanel-20260906.log");
+        var deletableUnlocked2 = Path.Combine(dir, "lunapanel-20260907.log");
+        var keptAtCutoff = Path.Combine(dir, "lunapanel-20260908.log");
+        var keptRecent = Path.Combine(dir, "lunapanel-20260909.log");
+
+        foreach (var file in new[] { deletableUnlocked1, deletableLocked, deletableUnlocked2, keptAtCutoff, keptRecent })
+        {
+            File.WriteAllText(file, "stale content\n");
+        }
+
+        using (new FileStream(deletableLocked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var ex = Record.Exception(() =>
+                writer.Write(new DiagnosticEvent(clock.UtcNow, DiagnosticLevel.Info, "Server", "today")));
+
+            Assert.Null(ex);
+        }
+
+        Assert.False(File.Exists(deletableUnlocked1), "Unlocked stale file before the locked one should still be deleted.");
+        Assert.False(File.Exists(deletableUnlocked2), "Unlocked stale file after the locked one should still be deleted.");
+        Assert.True(File.Exists(deletableLocked), "Locked stale file should be skipped, not deleted, and not crash the purge.");
+        Assert.True(File.Exists(keptAtCutoff));
+        Assert.True(File.Exists(keptRecent));
+        Assert.Contains("today", File.ReadAllText(Path.Combine(dir, "lunapanel-20260910.log")));
+    }
 }

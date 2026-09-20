@@ -1,5 +1,13 @@
 # Changelog
 
+## ver-1.4.4.1 - 2026-09-19
+
+- Page settings (rename, delete, visibility) used to be reachable only by holding a tab down for half a second, with nothing on screen hinting it was there. Turning on edit mode now shows a small gear on every tab - and on a folder's own name - that opens the same sheet with a click. The hold still works too.
+
+## ver-1.4.4.0 - 2026-09-19
+
+- Fixed a real crash: if something else on the machine briefly held the diagnostics log file at the exact moment LunaPanel tried to write to it, the whole app could go down. It now waits a beat and tries again, and if that still fails, just skips that one log line rather than taking the process with it. Found from an actual crash report.
+
 ## ver-1.4.3.1 - 2026-09-19
 
 - Fixed: the pairing window's countdown label was sized for its short countdown text, so the longer "code's expired" message clipped at the bottom once it wrapped to two lines. Same fix as the label beside it got earlier tonight - size it for the longest text it'll ever show. Confirmed live.

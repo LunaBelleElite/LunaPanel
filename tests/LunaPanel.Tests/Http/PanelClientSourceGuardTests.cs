@@ -3166,4 +3166,161 @@ public class PanelClientSourceGuardTests
 
         Assert.Equal(1, loadPanelCount);
     }
+
+    // ------------------------------------------------------------------
+    // [2026-09-19] The tab-row gear: a visible second entry point into a
+    // page's own settings sheet, alongside the pre-existing 500ms hold
+    // wireTabGesture drives. makeTabGear is the one place the gear's own
+    // event wiring lives; renderTabs decides WHERE one gets attached.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>The detail most likely to regress silently.</b> A later
+    /// "simplification" that drops the pointerdown stop, or reorders the
+    /// click handler so <c>openPageSettingsSheet</c> runs before (or
+    /// without) <c>stopPropagation</c>, would reintroduce the exact bug
+    /// this control exists to avoid: tapping the gear also switching the
+    /// tab's page (via wireTabGesture's own pointerup handler on the parent
+    /// button) or starting a drag. Pinned as the actual call shape, not
+    /// merely that both strings appear somewhere in the function.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_MakeTabGear_StopsPropagationOnPointerdown_AndBeforeOpeningPageSettingsOnClick()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function makeTabGear(pageIndex)");
+
+        Assert.Contains("gear.addEventListener('pointerdown', e => e.stopPropagation());", body, StringComparison.Ordinal);
+
+        var clickBody = ExtractJsFunctionBody(body, "gear.addEventListener('click', e => ");
+        var stopIndex = clickBody.IndexOf("e.stopPropagation();", StringComparison.Ordinal);
+        var openIndex = clickBody.IndexOf("openPageSettingsSheet(pageIndex);", StringComparison.Ordinal);
+
+        Assert.True(stopIndex >= 0, "Expected the click handler to call e.stopPropagation().");
+        Assert.True(openIndex >= 0, "Expected the click handler to call openPageSettingsSheet(pageIndex).");
+        Assert.True(stopIndex < openIndex, "Expected stopPropagation to run BEFORE openPageSettingsSheet, not after.");
+    }
+
+    /// <summary>
+    /// Every ordinary named tab gets a gear, wired to THAT tab's own
+    /// realIndex - the same parallel-array index wireTabGesture itself is
+    /// wired with a few lines later, never the loop's own position (see the
+    /// pageNames/pageIndices remarks a few lines above this loop in the
+    /// real source).
+    ///
+    /// [2026-09-19] Now editMode-gated, same as the folder branch's gear
+    /// below - the commander's own instruction was "only when someone
+    /// clicks edit," reversing this loop's earlier always-on gear. This
+    /// test only pins presence inside the loop; the editMode guard itself
+    /// is pinned separately by
+    /// <see cref="PanelClientSource_RenderTabs_OrdinaryTabLoop_OnlyAttachesItsGear_WhenEditModeIsOn"/>.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_RenderTabs_OrdinaryTabLoop_AttachesATabGear_ForTheTabsOwnRealIndex()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function renderTabs(data)");
+
+        Assert.Contains("b.appendChild(makeTabGear(realIndex));", body, StringComparison.Ordinal);
+
+        var gearIndex = body.IndexOf("b.appendChild(makeTabGear(realIndex));", StringComparison.Ordinal);
+        var wireIndex = body.IndexOf("wireTabGesture(b, realIndex);", StringComparison.Ordinal);
+        Assert.True(gearIndex >= 0 && wireIndex > gearIndex, "Expected the gear to be attached to the tab button before wireTabGesture wires it.");
+    }
+
+    /// <summary>
+    /// <b>The refinement:</b> the ordinary per-tab gear now only renders
+    /// while <c>editMode</c> is true, matching the folder branch's own
+    /// gate below (the commander's own ruling: "I only want the gears to
+    /// show up when someone clicks edit" - this reverses the earlier
+    /// always-on behavior for ordinary tabs specifically). Pinned by the
+    /// actual guard wrapping the append call, so a later edit that drops
+    /// the condition fails this test rather than only failing a live
+    /// check nobody runs in this suite.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_RenderTabs_OrdinaryTabLoop_OnlyAttachesItsGear_WhenEditModeIsOn()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function renderTabs(data)");
+
+        var loopStart = body.IndexOf("data.pageNames.forEach(", StringComparison.Ordinal);
+        Assert.True(loopStart >= 0, "Expected the ordinary tab loop to still exist.");
+
+        var loop = body.Substring(loopStart);
+
+        Assert.Contains("if (editMode) {", loop, StringComparison.Ordinal);
+
+        var editGuardIndex = loop.IndexOf("if (editMode) {", StringComparison.Ordinal);
+        var gearAppendIndex = loop.IndexOf("b.appendChild(makeTabGear(realIndex));", StringComparison.Ordinal);
+        Assert.True(gearAppendIndex > editGuardIndex, "Expected the ordinary tab's gear append call to sit inside the editMode guard.");
+    }
+
+    /// <summary>
+    /// The folder "up one level" view's own gear (case 2 of the brief):
+    /// attached to the folder NAME area, targeting the CURRENT folder page
+    /// (<c>data.pageIndex</c>) - never <c>data.parentPageIndex</c>, which is
+    /// the page a commander would navigate BACK to, not the one currently
+    /// on screen and named by <c>here</c>.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_RenderTabs_FolderBranch_AttachesATabGear_ToTheCurrentFolderPage()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function renderTabs(data)");
+
+        var hereIndex = body.IndexOf("here.className = 'tabFolderName';", StringComparison.Ordinal);
+        var gearIndex = body.IndexOf("tabs.appendChild(makeTabGear(data.pageIndex));", StringComparison.Ordinal);
+
+        Assert.True(hereIndex >= 0, "Expected the folder branch to still build the 'here' label.");
+        Assert.True(gearIndex > hereIndex, "Expected the folder gear to be attached after the folder name label.");
+        Assert.DoesNotContain("makeTabGear(data.parentPageIndex)", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The refinement:</b> the folder-name gear only renders while
+    /// <c>editMode</c> is true ("if you can't edit its page currently, it
+    /// doesn't need one" - the commander's own ruling). [2026-09-19] The
+    /// ordinary per-tab gears now carry the identical guard (see
+    /// <see cref="PanelClientSource_RenderTabs_OrdinaryTabLoop_OnlyAttachesItsGear_WhenEditModeIsOn"/>)
+    /// - this was the first of the two gates added, not a special case
+    /// that remains unique to folders. Pinned by the actual guard wrapping
+    /// the append call, so a later edit that drops the condition (making
+    /// the folder gear unconditional again) fails this test rather than
+    /// only failing a live check nobody runs in this suite.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_RenderTabs_FolderBranch_OnlyAttachesItsGear_WhenEditModeIsOn()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function renderTabs(data)");
+
+        var folderReturnIndex = body.IndexOf("data.parentPageIndex !== null", StringComparison.Ordinal);
+        Assert.True(folderReturnIndex >= 0, "Expected the folder branch to still exist.");
+
+        var folderBranchEnd = body.IndexOf("data.pageNames.forEach(", StringComparison.Ordinal);
+        Assert.True(folderBranchEnd > folderReturnIndex, "Expected the ordinary tab loop to follow the folder branch.");
+
+        var folderBranch = body.Substring(folderReturnIndex, folderBranchEnd - folderReturnIndex);
+
+        Assert.Contains("if (editMode) {", folderBranch, StringComparison.Ordinal);
+
+        var editGuardIndex = folderBranch.IndexOf("if (editMode) {", StringComparison.Ordinal);
+        var gearAppendIndex = folderBranch.IndexOf("tabs.appendChild(makeTabGear(data.pageIndex));", StringComparison.Ordinal);
+        Assert.True(gearAppendIndex > editGuardIndex, "Expected the folder gear's append call to sit inside the editMode guard.");
+    }
+
+    /// <summary>
+    /// The "+" gets no gear at all - the commander was explicit about this
+    /// ("there's no point on the +"). A guard against the most likely
+    /// accidental regression: a future edit that generalizes the ordinary
+    /// tab loop's gear-attaching code so it also runs for addBtn.
+    /// </summary>
+    [Fact]
+    public void PanelClientSource_RenderTabs_AddButton_NeverGetsATabGear()
+    {
+        var body = ExtractJsFunctionBody(ReadPanelClientSource(), "function renderTabs(data)");
+
+        var addBtnIndex = body.IndexOf("addBtn.className = 'tab tabAdd'", StringComparison.Ordinal);
+        Assert.True(addBtnIndex >= 0, "Expected the '+' button to still be built.");
+
+        var addBtnSection = body.Substring(addBtnIndex);
+        Assert.DoesNotContain("makeTabGear", addBtnSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("tabGear", addBtnSection, StringComparison.Ordinal);
+    }
 }

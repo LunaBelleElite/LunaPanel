@@ -365,6 +365,7 @@ public static class PanelClientEndpoint
     font: inherit; font-size: 12px; letter-spacing: .06em; background: transparent;
     color: var(--lp-dim); border: 1px solid var(--lp-frame); border-radius: 6px;
     padding: 4px 10px; cursor: pointer; white-space: nowrap; flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
   }
   .tab.active { color: var(--lp-text); border-color: var(--lp-lit); }
   /* [2026-09-16] Drag-to-reorder the tab bar (ref/docs/panels-and-pages.md)
@@ -406,6 +407,24 @@ public static class PanelClientEndpoint
   .tabFolderName {
     font-size: 12px; letter-spacing: .06em; color: var(--lp-dim);
     white-space: nowrap; flex: 0 0 auto; padding: 4px 2px; cursor: default;
+  }
+  /* [2026-09-19] Page settings' second entry point (the hold gesture
+     wireTabGesture already drives is the first): a visible gear, on every
+     ordinary tab and on the folder-name label, opening the exact same sheet.
+     Dimmer/smaller than the tab's own label - same "looks secondary but is a
+     real hit target" balance #gearBtn strikes for the app's own settings -
+     with its own inline-flex row so the gear sits beside the label rather
+     than wrapping onto its own line inside a narrow tab (see .tab's own
+     display: inline-flex, added for the same reason). */
+  /* [2026-09-19] --lp-lit, not --lp-dim: a resting tab's own text is
+     already --lp-dim, so the gear at that shade blended into it on a
+     low-contrast HUD theme (the commander's own screenshot showed this
+     directly). --lp-lit is the same "lit up" accent the active tab and
+     the slot glow already use, so the gear reads as a control rather
+     than as part of the tab's own dim resting label. */
+  .tabGear {
+    font-size: 12px; color: var(--lp-lit); cursor: pointer; line-height: 1;
+    flex: 0 0 auto;
   }
 
   #stage { position: relative; flex: 1 1 auto; overflow: hidden; }
@@ -1914,6 +1933,31 @@ async function postPageMove(fromIndex, toIndex) {
   }
 }
 
+// [2026-09-19] The visible second entry point into a page's own settings -
+// the 500ms hold below is the first, and stays completely unchanged. A
+// commander who doesn't already know the hold gesture exists otherwise has
+// no way to discover it. stopPropagation on BOTH pointerdown and click:
+// pointerdown so wireTabGesture's own listener on the parent tab never even
+// starts its long-press timer or a drag from a touch that began on the gear,
+// click so the parent's own tap-to-switch-page handler never also fires.
+// Without the pointerdown stop, a finger held on the gear for 500ms would
+// race this click against the parent's long-press timer - harmless here
+// (both open the same sheet for the same index) but exactly the kind of
+// coincidence-masks-a-bug case worth foreclosing outright.
+function makeTabGear(pageIndex) {
+  const gear = document.createElement('span');
+  gear.className = 'tabGear';
+  gear.setAttribute('role', 'button');
+  gear.setAttribute('aria-label', 'Page settings');
+  gear.textContent = '⚙︎';
+  gear.addEventListener('pointerdown', e => e.stopPropagation());
+  gear.addEventListener('click', e => {
+    e.stopPropagation();
+    openPageSettingsSheet(pageIndex);
+  });
+  return gear;
+}
+
 // A long-press on a tab opens that tab's own "page settings" - the same
 // 500ms-hold convention wireSlotGesture uses for a slot's own long-press
 // (LONG_PRESS_MS, defined below). Deliberately targets the PRESSED tab's
@@ -2104,6 +2148,14 @@ function renderTabs(data) {
     here.className = 'tabFolderName';
     here.textContent = data.currentPageName || '';
     tabs.appendChild(here);
+    // [2026-09-19] Only while edit mode is on - the commander's own ruling:
+    // "if you can't edit its page currently, it doesn't need one." Reads
+    // editMode at render time, same as the editing-class toggle a few lines
+    // up, so toggling #editBtn (which re-renders via renderPanel) makes this
+    // gear appear/disappear live rather than only on the initial folder load.
+    if (editMode) {
+      tabs.appendChild(makeTabGear(data.pageIndex));
+    }
     return;
   }
 
@@ -2116,7 +2168,19 @@ function renderTabs(data) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'tab' + (realIndex === data.pageIndex ? ' active' : '');
-    b.textContent = name;
+    const label = document.createElement('span');
+    label.className = 'tabLabel';
+    label.textContent = name;
+    b.appendChild(label);
+    // [2026-09-19] editMode-gated, matching the folder branch's own gear
+    // above - the commander's own instruction was "only when someone
+    // clicks edit," reversing this loop's earlier always-on gear. Read at
+    // render time, same as the folder branch, so toggling #editBtn makes
+    // every ordinary tab's gear appear/disappear live rather than only on
+    // the next full page load.
+    if (editMode) {
+      b.appendChild(makeTabGear(realIndex));
+    }
     wireTabGesture(b, realIndex);
     tabs.appendChild(b);
     tabButtons.push({ index: realIndex, btn: b });
