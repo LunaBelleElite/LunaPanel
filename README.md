@@ -181,3 +181,8 @@ file(s) from `%LocalAppData%\LunaPanel\Logs\` (a new one's written each day,
 named `lunapanel-YYYYMMDD.log`, and the tray's About window has a button
 straight there) and whatever error text you saw — that's usually what turns
 "it broke" into something I can actually chase down.
+
+Would rather talk it through? Come find me on the
+[LunaPrograms Discord](https://discord.gg/64Gg9qdgsT) — the support channel is
+for how-do-I questions, and the bug-reports channel is for things that are
+actually broken.

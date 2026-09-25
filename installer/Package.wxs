@@ -2,8 +2,8 @@
 <!--
   Packages the self-contained publish output (publish/tray-win-x64, built via
   dotnet publish of LunaPanel.Tray.csproj, self contained, win-x64) into an
-  MSI. Only that publish folder is harvested - nothing from the repo root,
-  .claude/, ref/docs/, tests/, or memory/handoff files ever goes in.
+  MSI. Only that publish folder is harvested - nothing else from the repo
+  (source, tests, docs, or working notes) ever goes in.
 
   UpgradeCode is fixed forever - never regenerate it, or upgrades stop
   detecting the prior install.

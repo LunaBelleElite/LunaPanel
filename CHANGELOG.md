@@ -1,5 +1,9 @@
 # Changelog
 
+## ver-1.4.4.2 - 2026-09-25
+
+- The README now points to the LunaPrograms Discord, so if you're stuck or something's actually broken, there's a place to ask or report it.
+
 ## ver-1.4.4.1 - 2026-09-19
 
 - Page settings (rename, delete, visibility) used to be reachable only by holding a tab down for half a second, with nothing on screen hinting it was there. Turning on edit mode now shows a small gear on every tab - and on a folder's own name - that opens the same sheet with a click. The hold still works too.
