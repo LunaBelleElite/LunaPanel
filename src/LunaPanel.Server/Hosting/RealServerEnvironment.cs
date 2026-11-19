@@ -89,11 +89,14 @@ public static class RealServerEnvironment
         var graphicsConfigurationOverridePath = Path.Combine(
             localAppData, "Frontier Developments", "Elite Dangerous", "Options", "Graphics", "GraphicsConfigurationOverride.xml");
 
-        // Elite's own live-state directory - a fixed, well-documented
-        // location under the player's profile, distinct from anything under
-        // %LOCALAPPDATA%. Absence just means the game has never been
-        // launched yet - see StatusJsonDiscovery.
-        var statusJsonDirectory = Path.Combine(userProfile, "Saved Games", "Frontier Developments", "Elite Dangerous");
+        // Elite's own live-state directory, distinct from anything under
+        // %LOCALAPPDATA%. It lives under Windows' Saved Games known folder,
+        // which Windows lets a user move, so we ask Windows where it really
+        // is and fall back to <profile>\Saved Games if that fails - see
+        // EliteSavedGamesLocator. Read once, here: a moved folder takes
+        // effect at the next launch. Absence just means the game has never
+        // been launched yet - see StatusJsonDiscovery.
+        var statusJsonDirectory = EliteSavedGamesLocator.ResolveStatusDirectory(userProfile, Win32KnownFolderLookup.GetSavedGamesPath);
 
         // UNVERIFIED (see ref/docs/discovery.md's FrontierInstallDiscovery
         // remarks): no standalone Frontier launcher install exists on any

@@ -1,5 +1,9 @@
 # Changelog
 
+## ver-1.4.6.0 - 2026-11-19
+
+- Fixed: if you've moved Windows' Saved Games folder somewhere else (another drive, say), LunaPanel kept looking for Elite's status and journal files in the old default spot. It never saw the game running, so the panel stopped following what you were doing. It now asks Windows where the folder really is. Restart LunaPanel after moving the folder, since it only checks once at startup.
+
 ## ver-1.4.5.0 - 2026-11-19
 
 - Fixed: Elite key bindings were invisible if the preset's name had a dot in it (something like "My Pad v1.2"). The status window said "Bindings found: Not found," and LunaPanel quietly used the game's default keyboard preset instead of yours, so buttons could press the wrong keys. It now reads preset names with any character Windows allows in a file name. Found from a real user's report.
