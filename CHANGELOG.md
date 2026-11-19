@@ -1,5 +1,9 @@
 # Changelog
 
+## ver-1.4.6.1 - 2026-11-19
+
+- GitHub's "new issue" page now has a link to the LunaPrograms Discord next to the bug report and feature idea forms, so if you'd rather ask a question or talk it through first, there's a place to do that. The forms are still there for bug reports and ideas.
+
 ## ver-1.4.6.0 - 2026-11-19
 
 - Fixed: if you've moved Windows' Saved Games folder somewhere else (another drive, say), LunaPanel kept looking for Elite's status and journal files in the old default spot. It never saw the game running, so the panel stopped following what you were doing. It now asks Windows where the folder really is. Restart LunaPanel after moving the folder, since it only checks once at startup.

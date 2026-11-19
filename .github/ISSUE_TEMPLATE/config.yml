@@ -1,7 +1,5 @@
 blank_issues_enabled: false
-# Was a link to GitHub Discussions here - dropped 2026-09-18. The user
-# decided a Discord server (queued, not built yet - see memory
-# project_pending_discord_server.md) is the better "something else"
-# destination than Discussions. Add the real invite link here once that
-# server exists, rather than leaving a Discussions link nobody confirmed
-# was even enabled.
+contact_links:
+  - name: Questions and help on Discord
+    url: https://discord.gg/64Gg9qdgsT
+    about: Prefer to talk it through? The LunaPrograms Discord has a support channel for how-do-I questions and a bug-reports channel for things that are actually broken.
