@@ -1,5 +1,11 @@
 # Changelog
 
+## ver-1.4.5.0 - 2026-11-19
+
+- Fixed: Elite key bindings were invisible if the preset's name had a dot in it (something like "My Pad v1.2"). The status window said "Bindings found: Not found," and LunaPanel quietly used the game's default keyboard preset instead of yours, so buttons could press the wrong keys. It now reads preset names with any character Windows allows in a file name. Found from a real user's report.
+- Fixed: on Windows set to an Arabic or Thai region, which count years differently, the daily log file could get the wrong year in its name and be cleaned up on the wrong schedule, so today's log could be deleted or old ones kept forever. Log files are now always named with plain Gregorian dates.
+- Fixed: a folder path with an ampersand in it lost the & in the About and Elite-setup windows ("Elite & Co" showed as "Elite  Co"). Paths now show exactly as they are.
+
 ## ver-1.4.4.2 - 2026-09-25
 
 - The README now points to the LunaPrograms Discord, so if you're stuck or something's actually broken, there's a place to ask or report it.

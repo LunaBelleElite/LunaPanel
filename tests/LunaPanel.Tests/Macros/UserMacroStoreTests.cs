@@ -182,6 +182,25 @@ public class UserMacroStoreTests
     /// Renamed aside like a corrupt layout, logged at Error, never
     /// overwritten in place, and the healthy macro beside it still loads.
     /// </summary>
+    [Theory]
+    [InlineData("ar-SA")]
+    [InlineData("th-TH")]
+    public void LoadAll_CorruptFile_UnderANonGregorianCulture_StampsTheGregorianYear(string culture)
+    {
+        var dir = NewTempDir();
+        var store = new UserMacroStore(dir, new CapturingDiagnosticLog());
+        File.WriteAllText(Path.Combine(dir, "macro-user-broken.json"), "{ this is not json");
+
+        var before = DateTime.UtcNow.Year;
+        CultureScope.Run(culture, () => store.LoadAll());
+        var after = DateTime.UtcNow.Year;
+
+        var stamp = Path.GetFileName(Assert.Single(Directory.GetFiles(dir, "macro-user-broken.json.corrupt-*")))
+            .Substring("macro-user-broken.json.corrupt-".Length);
+        Assert.Matches(@"^\d{17}$", stamp);
+        Assert.InRange(int.Parse(stamp.Substring(0, 4), System.Globalization.CultureInfo.InvariantCulture), before, after);
+    }
+
     [Fact]
     public void LoadAll_CorruptFile_IsRenamedAside_AndCostsOnlyThatOneMacro()
     {

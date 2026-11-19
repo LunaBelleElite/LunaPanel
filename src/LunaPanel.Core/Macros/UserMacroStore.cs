@@ -250,7 +250,7 @@ public sealed class UserMacroStore
         var result = MacroDefinition.TryParse(text);
         if (!result.Success)
         {
-            var corruptPath = $"{path}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+            var corruptPath = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{path}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmssfff}");
             File.Move(path, corruptPath, overwrite: true);
 
             // Detail carries the parse error, never a file path - these logs

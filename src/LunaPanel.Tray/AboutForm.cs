@@ -315,6 +315,9 @@ internal sealed class AboutForm : Form
         {
             AutoSize = true,
             MaximumSize = new Size(360, 0),
+            // A path or folder name can contain '&' ("Elite & Co"); with the
+            // default UseMnemonic the Label eats it and underlines a letter.
+            UseMnemonic = false,
             ForeColor = primaryText,
             Text = valueText,
             Margin = new Padding(0, 0, 12, 0),

@@ -391,4 +391,215 @@ public class PresetSelectorTests
         Assert.False(result.PresetNameMismatch);
         Assert.Equal("Custom", result.ActualPresetNameInFile);
     }
+
+    // -----------------------------------------------------------------
+    // Preset names may contain dots and spaces; the version is the LAST two
+    // numeric groups. Fixture names here are generic.
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void Select_StartPresetNamesADottedPreset_ResolvesToTheCommandersFile_NotStock()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.1.binds", CommanderContent("My Pad v1.2 Fix", 4, 1));
+        temp.CreateFile("Bindings/StartPreset.4.start", "My Pad v1.2 Fix\n");
+        var controlSchemesDir = temp.CreateSubdirectory("ControlSchemes");
+        temp.CreateFile("ControlSchemes/KeyboardMouseOnly.binds", StockContent("KeyboardMouseOnly"));
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDir, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "My Pad v1.2 Fix.4.1.binds"), result.SelectedFilePath);
+        Assert.Equal(PresetSelectionMethod.CommanderAuthored, result.Method);
+        Assert.Equal(PresetOrigin.CommanderAuthored, result.Origin);
+        Assert.Equal(new BindsVersion(4, 1), result.Version);
+        Assert.False(result.PresetNameMismatch);
+        Assert.Equal("My Pad v1.2 Fix", result.ActualPresetNameInFile);
+    }
+
+    [Fact]
+    public void Select_DottedPreset_FilesOwnPresetNameDiffers_StillReportsMismatch()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/Acme X.Pro.4.2.binds", CommanderContent("Something Else", 4, 2));
+        temp.CreateFile("Bindings/StartPreset.4.start", "Acme X.Pro\n");
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDirectory: null, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "Acme X.Pro.4.2.binds"), result.SelectedFilePath);
+        Assert.Equal(PresetSelectionMethod.CommanderAuthored, result.Method);
+        Assert.True(result.PresetNameMismatch);
+        Assert.Equal("Something Else", result.ActualPresetNameInFile);
+    }
+
+    [Fact]
+    public void Select_PresetNameEndingInDigits_ResolvesByTheLastTwoNumericGroupsAsVersion()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/Foo.2.4.1.binds", CommanderContent("Foo.2", 4, 1));
+        temp.CreateFile("Bindings/StartPreset.4.start", "Foo.2\n");
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDirectory: null, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "Foo.2.4.1.binds"), result.SelectedFilePath);
+        Assert.Equal(PresetSelectionMethod.CommanderAuthored, result.Method);
+        Assert.Equal(new BindsVersion(4, 1), result.Version);
+    }
+
+    [Fact]
+    public void Select_DottedPresetBackupFile_IsNotResolved()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.1.binds.1574007660.backup", CommanderContent("My Pad v1.2 Fix", 4, 1));
+        temp.CreateFile("Bindings/StartPreset.4.start", "My Pad v1.2 Fix\n");
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDirectory: null, bindingsDiscovery, log);
+
+        Assert.Null(result.SelectedFilePath);
+        Assert.Equal(PresetSelectionMethod.Fallback, result.Method);
+    }
+
+    /// <summary>
+    /// End-to-end regression for the real-world folder shape: several
+    /// dotted-name commander files at different versions, StartPreset naming
+    /// the highest, and a stock scheme sitting in ControlSchemes. Before the
+    /// fix both discovery and selection ignored every dotted file, so the
+    /// panel fell through to the stock scheme.
+    /// </summary>
+    [Fact]
+    public void Select_DottedPresetFolderShape_EndToEnd_PicksTheCommandersFile_AndDiscoveryFindsIt()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.3.0.binds", CommanderContent("My Pad v1.2 Fix", 3, 0));
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.1.binds", CommanderContent("My Pad v1.2 Fix", 4, 1));
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.2.binds", CommanderContent("My Pad v1.2 Fix", 4, 2));
+        temp.CreateFile("Bindings/StartPreset.4.start", "My Pad v1.2 Fix\n");
+        var controlSchemesDir = temp.CreateSubdirectory("ControlSchemes");
+        temp.CreateFile("ControlSchemes/KeyboardMouseOnly.binds", StockContent("KeyboardMouseOnly"));
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        Assert.NotNull(bindingsDiscovery.LatestBindsFilePath);
+        Assert.Equal(temp.Combine("Bindings", "My Pad v1.2 Fix.4.2.binds"), bindingsDiscovery.LatestBindsFilePath);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDir, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "My Pad v1.2 Fix.4.2.binds"), result.SelectedFilePath);
+        Assert.Equal(PresetSelectionMethod.CommanderAuthored, result.Method);
+        Assert.Equal(PresetOrigin.CommanderAuthored, result.Origin);
+        Assert.Equal(new BindsVersion(4, 2), result.Version);
+    }
+
+    // -----------------------------------------------------------------
+    // Every character Windows allows in a file name must resolve through
+    // StartPreset (one case per character class, plus a mixed one).
+    // -----------------------------------------------------------------
+
+    [Theory]
+    [InlineData("Plain Spaces Name")]
+    [InlineData("dots.in.the.name")]
+    [InlineData("hy-phen_under_score")]
+    [InlineData("O'Brien's & Co (v2), Test")]
+    [InlineData("100% #1 @home +x =y")]
+    [InlineData("semi;colon [br] {cu} ~t !e $d ^c `b")]
+    [InlineData("Café Ünï")]
+    [InlineData("Пульт")]
+    [InlineData("手柄配置")]
+    [InlineData("Acme-X.Pro v2 (Ünï) Fix, #3_final")]
+    public void Select_WindowsLegalPresetNames_ResolveToTheCommandersFile_WithTheRightNameAndVersion(string presetName)
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        var xmlName = System.Security.SecurityElement.Escape(presetName);
+        temp.CreateFile($"Bindings/{presetName}.4.6.binds", CommanderContent(xmlName, 4, 6));
+        temp.CreateFile($"Bindings/{presetName}.4.7.binds", CommanderContent(xmlName, 4, 7));
+        temp.CreateFile("Bindings/StartPreset.4.start", presetName + "\n");
+        var controlSchemesDir = temp.CreateSubdirectory("ControlSchemes");
+        temp.CreateFile("ControlSchemes/KeyboardMouseOnly.binds", StockContent("KeyboardMouseOnly"));
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDir, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", $"{presetName}.4.7.binds"), result.SelectedFilePath);
+        Assert.Equal(PresetSelectionMethod.CommanderAuthored, result.Method);
+        Assert.Equal(presetName, result.SelectedPresetName);
+        Assert.Equal(new BindsVersion(4, 7), result.Version);
+        Assert.False(result.PresetNameMismatch);
+        Assert.Equal(presetName, result.ActualPresetNameInFile);
+    }
+
+    [Fact]
+    public void Select_ArabicIndicDigitVersionFile_IsIgnoredWithoutThrowing()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/Custom.٤.٩.binds", CommanderContent("Custom", 4, 9));
+        temp.CreateFile("Bindings/Custom.4.2.binds", CommanderContent("Custom", 4, 2));
+        temp.CreateFile("Bindings/StartPreset.4.start", "Custom\n");
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDirectory: null, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "Custom.4.2.binds"), result.SelectedFilePath);
+        Assert.Equal(new BindsVersion(4, 2), result.Version);
+    }
+
+    [Fact]
+    public void Select_VersionBeyondIntRangeFile_IsIgnoredWithoutThrowing()
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/Custom.4.99999999999.binds", CommanderContent("Custom", 4, 9));
+        temp.CreateFile("Bindings/Custom.4.2.binds", CommanderContent("Custom", 4, 2));
+        temp.CreateFile("Bindings/StartPreset.4.start", "Custom\n");
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDirectory: null, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "Custom.4.2.binds"), result.SelectedFilePath);
+        Assert.Equal(new BindsVersion(4, 2), result.Version);
+    }
+
+    [Theory]
+    [InlineData("StartPreset.99999999999.start")]
+    [InlineData("StartPreset.٩.start")]
+    public void Select_UnparseableStartPresetNumber_IsIgnoredWithoutThrowing(string oddStartName)
+    {
+        using var temp = TempDirectory.Create();
+        var bindingsDir = temp.CreateSubdirectory("Bindings");
+        temp.CreateFile("Bindings/Custom.4.2.binds", CommanderContent("Custom", 4, 2));
+        temp.CreateFile($"Bindings/{oddStartName}", "Wrong\n");
+        temp.CreateFile("Bindings/StartPreset.4.start", "Custom\n");
+
+        var log = new DiagnosticRingBuffer(200);
+        var bindingsDiscovery = BindingsDiscovery.Discover(bindingsDir, log);
+
+        var result = PresetSelector.Select(bindingsDir, controlSchemesDirectory: null, bindingsDiscovery, log);
+
+        Assert.Equal(temp.Combine("Bindings", "Custom.4.2.binds"), result.SelectedFilePath);
+        Assert.Equal("Custom", result.SelectedPresetName);
+    }
 }

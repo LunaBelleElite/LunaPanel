@@ -73,11 +73,17 @@ public static class PresetSelector
     // Same shape as BindingsDiscovery's own regex (kept independent rather
     // than shared, since this one also needs a per-NAME lookup, not just a
     // single overall newest-file scan).
+    //
+    // The preset name is commander-chosen and may contain dots and spaces, so
+    // the group is a greedy ".+" (not "[^.]+"): the LAST two numeric groups
+    // before ".binds" are always the version. Version groups are ASCII-only
+    // "[0-9]" so every match is something int.TryParse can read (or cleanly
+    // reject on overflow).
     private static readonly Regex BindsFileRegex =
-        new(@"^(?<preset>[^.]+)\.(?<major>\d+)\.(?<minor>\d+)\.binds$", RegexOptions.Compiled);
+        new(@"^(?<preset>.+)\.(?<major>[0-9]+)\.(?<minor>[0-9]+)\.binds$", RegexOptions.Compiled);
 
     private static readonly Regex StartPresetFileRegex =
-        new(@"^StartPreset\.(?<n>\d+)\.start$", RegexOptions.Compiled);
+        new(@"^StartPreset\.(?<n>[0-9]+)\.start$", RegexOptions.Compiled);
 
     private sealed record ResolvedCandidate(string FilePath, PresetOrigin Origin, BindsVersion? Version);
 
@@ -95,7 +101,7 @@ public static class PresetSelector
         if (startPresetNames.Count > 0)
         {
             var candidates = startPresetNames
-                .Select(name => (Name: name, Resolved: ResolveCandidate(name, bindingsDirectory, controlSchemesDirectory)))
+                .Select(name => (Name: name, Resolved: ResolveCandidate(name, bindingsDirectory, controlSchemesDirectory, log)))
                 .ToList();
 
             var commander = candidates.FirstOrDefault(c => c.Resolved is { Origin: PresetOrigin.CommanderAuthored });
@@ -158,7 +164,12 @@ public static class PresetSelector
                 continue;
             }
 
-            var n = int.Parse(match.Groups["n"].Value, CultureInfo.InvariantCulture);
+            if (!int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var n))
+            {
+                log.Debug("Discovery", $"StartPreset file {file} -> ignored (number out of range)");
+                continue;
+            }
+
             if (n > bestN)
             {
                 bestN = n;
@@ -202,7 +213,7 @@ public static class PresetSelector
     }
 
     /// <summary>Step 2: resolve one candidate name to a file, commander's own preferred over stock.</summary>
-    private static ResolvedCandidate? ResolveCandidate(string name, string bindingsDirectory, string? controlSchemesDirectory)
+    private static ResolvedCandidate? ResolveCandidate(string name, string bindingsDirectory, string? controlSchemesDirectory, IDiagnosticLog log)
     {
         BindsVersion? bestVersion = null;
         string? bestPath = null;
@@ -217,9 +228,14 @@ public static class PresetSelector
                     continue;
                 }
 
-                var version = new BindsVersion(
-                    int.Parse(match.Groups["major"].Value, CultureInfo.InvariantCulture),
-                    int.Parse(match.Groups["minor"].Value, CultureInfo.InvariantCulture));
+                if (!int.TryParse(match.Groups["major"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+                    || !int.TryParse(match.Groups["minor"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minor))
+                {
+                    log.Debug("Discovery", $"Binds file {file} -> ignored (version number out of range)");
+                    continue;
+                }
+
+                var version = new BindsVersion(major, minor);
 
                 var isNewer = bestVersion is null
                     || version.Major > bestVersion.Major

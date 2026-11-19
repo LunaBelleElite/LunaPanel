@@ -120,4 +120,112 @@ public class BindingsDiscoveryTests
         Assert.Contains(messages, m => m.Contains("Custom.4.10.binds", StringComparison.Ordinal) && m.Contains("version 4.10", StringComparison.Ordinal));
         Assert.Contains(messages, m => m.Contains("newest binds file selected", StringComparison.Ordinal) && m.Contains("Custom.4.10.binds", StringComparison.Ordinal));
     }
+
+    // -----------------------------------------------------------------
+    // Preset names may themselves contain dots and spaces; the version is
+    // the LAST two numeric groups. Fixture names here are generic.
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void Discover_DottedPresetName_HighestVersionWins()
+    {
+        using var temp = TempDirectory.Create();
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.3.0.binds");
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.1.binds");
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.2.binds");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = BindingsDiscovery.Discover(temp.Combine("Bindings"), log);
+
+        Assert.Equal(new BindsVersion(4, 2), result.LatestVersion);
+        Assert.Equal(temp.Combine("Bindings", "My Pad v1.2 Fix.4.2.binds"), result.LatestBindsFilePath);
+    }
+
+    [Fact]
+    public void Discover_PresetNameEndingInDigits_LastTwoNumericGroupsAreTheVersion()
+    {
+        using var temp = TempDirectory.Create();
+        temp.CreateFile("Bindings/Foo.2.4.1.binds");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = BindingsDiscovery.Discover(temp.Combine("Bindings"), log);
+
+        Assert.Equal(new BindsVersion(4, 1), result.LatestVersion);
+        Assert.Equal(temp.Combine("Bindings", "Foo.2.4.1.binds"), result.LatestBindsFilePath);
+    }
+
+    [Fact]
+    public void Discover_DottedPresetNameBackupFile_IsStillIgnored()
+    {
+        using var temp = TempDirectory.Create();
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.1.binds");
+        temp.CreateFile("Bindings/My Pad v1.2 Fix.4.1.binds.1574007660.backup");
+        temp.CreateFile("Bindings/Acme X.Pro.9.9.binds.1574007660.backup");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = BindingsDiscovery.Discover(temp.Combine("Bindings"), log);
+
+        Assert.Equal(new BindsVersion(4, 1), result.LatestVersion);
+        Assert.Equal(temp.Combine("Bindings", "My Pad v1.2 Fix.4.1.binds"), result.LatestBindsFilePath);
+    }
+
+    // -----------------------------------------------------------------
+    // Every character Windows allows in a file name must survive in the
+    // preset part (one case per character class, plus a mixed one).
+    // -----------------------------------------------------------------
+
+    [Theory]
+    [InlineData("Plain Spaces Name")]
+    [InlineData("dots.in.the.name")]
+    [InlineData("hy-phen_under_score")]
+    [InlineData("O'Brien's & Co (v2), Test")]
+    [InlineData("100% #1 @home +x =y")]
+    [InlineData("semi;colon [br] {cu} ~t !e $d ^c `b")]
+    [InlineData("Café Ünï")]
+    [InlineData("Пульт")]
+    [InlineData("手柄配置")]
+    [InlineData("Acme-X.Pro v2 (Ünï) Fix, #3_final")]
+    public void Discover_WindowsLegalPresetNames_AreRecognised_WithTheRightVersion(string presetName)
+    {
+        using var temp = TempDirectory.Create();
+        temp.CreateFile($"Bindings/{presetName}.4.6.binds");
+        temp.CreateFile($"Bindings/{presetName}.4.7.binds");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = BindingsDiscovery.Discover(temp.Combine("Bindings"), log);
+
+        Assert.Equal(new BindsVersion(4, 7), result.LatestVersion);
+        Assert.Equal(temp.Combine("Bindings", $"{presetName}.4.7.binds"), result.LatestBindsFilePath);
+    }
+
+    [Fact]
+    public void Discover_ArabicIndicDigitVersion_IsIgnoredWithoutThrowing()
+    {
+        using var temp = TempDirectory.Create();
+        // ٤ ٢ are Arabic-Indic digits: \d matches them, int.Parse rejects them.
+        temp.CreateFile("Bindings/Custom.٤.٢.binds");
+        temp.CreateFile("Bindings/Custom.4.1.binds");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = BindingsDiscovery.Discover(temp.Combine("Bindings"), log);
+
+        Assert.Equal(new BindsVersion(4, 1), result.LatestVersion);
+        Assert.Equal(temp.Combine("Bindings", "Custom.4.1.binds"), result.LatestBindsFilePath);
+    }
+
+    [Theory]
+    [InlineData("Custom.99999999999.1.binds")]
+    [InlineData("Custom.4.99999999999.binds")]
+    public void Discover_VersionNumberBeyondIntRange_IsIgnoredWithoutThrowing(string overflowName)
+    {
+        using var temp = TempDirectory.Create();
+        temp.CreateFile($"Bindings/{overflowName}");
+        temp.CreateFile("Bindings/Custom.4.1.binds");
+
+        var log = new DiagnosticRingBuffer(200);
+        var result = BindingsDiscovery.Discover(temp.Combine("Bindings"), log);
+
+        Assert.Equal(new BindsVersion(4, 1), result.LatestVersion);
+        Assert.Equal(temp.Combine("Bindings", "Custom.4.1.binds"), result.LatestBindsFilePath);
+    }
 }

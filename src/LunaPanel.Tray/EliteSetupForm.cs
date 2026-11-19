@@ -125,6 +125,8 @@ internal sealed class EliteSetupForm : Form
         _statusLabel = new Label
         {
             AutoSize = false,
+            // Shows "Found: {path}"; '&' in a path must not act as a mnemonic.
+            UseMnemonic = false,
             Margin = new Padding(0, 0, 0, 12),
         };
 

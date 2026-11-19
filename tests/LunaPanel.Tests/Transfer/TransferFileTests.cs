@@ -372,6 +372,17 @@ public class TransferFileTests
         Assert.Equal("lunapanel-profile-luna-s-phone-spare-20260910" + TransferFile.FileExtension, name);
     }
 
+    [Theory]
+    [InlineData("ar-SA")]
+    [InlineData("th-TH")]
+    public void FileNameFor_UnderANonGregorianCulture_StillStampsTheGregorianDate(string culture)
+    {
+        string? name = null;
+        CultureScope.Run(culture, () => name = TransferFile.FileNameFor(TransferKind.Macros, null, Exported));
+
+        Assert.Equal("lunapanel-macros-20260910" + TransferFile.FileExtension, name);
+    }
+
     [Fact]
     public void FileNameFor_ANameWithNothingUsableInIt_StillProducesAName()
     {

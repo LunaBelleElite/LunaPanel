@@ -86,6 +86,25 @@ public class ThemeOverrideStoreTests
         Assert.False(File.Exists(MainPath(dir, "device-a") + ".tmp"));
     }
 
+    [Theory]
+    [InlineData("ar-SA")]
+    [InlineData("th-TH")]
+    public void Load_CorruptFile_UnderANonGregorianCulture_StampsTheGregorianYear(string culture)
+    {
+        var dir = NewTempDir();
+        var store = new ThemeOverrideStore(dir, new CapturingDiagnosticLog());
+        File.WriteAllText(MainPath(dir, "device-a"), "{ not valid json");
+
+        var before = DateTime.UtcNow.Year;
+        CultureScope.Run(culture, () => store.Load("device-a"));
+        var after = DateTime.UtcNow.Year;
+
+        var stamp = Path.GetFileName(Assert.Single(Directory.GetFiles(dir, "theme-override-device-a.json.corrupt-*")))
+            .Substring("theme-override-device-a.json.corrupt-".Length);
+        Assert.Matches(@"^\d{17}$", stamp);
+        Assert.InRange(int.Parse(stamp.Substring(0, 4), System.Globalization.CultureInfo.InvariantCulture), before, after);
+    }
+
     [Fact]
     public void Load_CorruptFile_RenamesAside_ReturnsCorrupt_AndOriginalBytesAreStillReadable()
     {

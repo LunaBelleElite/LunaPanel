@@ -112,7 +112,7 @@ public sealed class ThemeOverrideStore
 
     private void RenameAsideAsCorrupt(string mainPath)
     {
-        var corruptPath = $"{mainPath}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+        var corruptPath = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{mainPath}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmssfff}");
         File.Move(mainPath, corruptPath, overwrite: true);
     }
 

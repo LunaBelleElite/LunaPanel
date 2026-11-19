@@ -317,7 +317,7 @@ public static class TransferFile
     {
         var prefix = kind == TransferKind.Profile ? "lunapanel-profile" : "lunapanel-macros";
         var safeLabel = SanitizeForFileName(label);
-        var stamp = exportedAt.ToUniversalTime().ToString("yyyyMMdd");
+        var stamp = exportedAt.ToUniversalTime().ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
 
         return safeLabel.Length == 0
             ? $"{prefix}-{stamp}{FileExtension}"

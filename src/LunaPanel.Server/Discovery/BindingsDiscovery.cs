@@ -44,8 +44,17 @@ public static class BindingsDiscovery
     // Anchored at both ends deliberately: "Custom.4.3.binds.1574007660.backup"
     // must NOT match, since a backup file has trailing characters after
     // ".binds" that this pattern's closing "$" refuses to allow.
+    //
+    // The preset name is commander-chosen and may contain dots and spaces
+    // (e.g. "My Pad v1.2 Fix.4.1.binds"), so the preset group is ".+", not
+    // "[^.]+". It is greedy on purpose: the regex engine backtracks only as far
+    // as needed for the LAST two dot-separated numeric groups plus ".binds" to
+    // match, so those two groups are always the version and everything before
+    // them - including any digits-and-dots - is the preset name. The version
+    // groups are ASCII-only "[0-9]" (not "\d", which also matches non-ASCII
+    // digits that int.TryParse rejects).
     private static readonly Regex BindsFileRegex =
-        new(@"^(?<preset>[^.]+)\.(?<major>\d+)\.(?<minor>\d+)\.binds$", RegexOptions.Compiled);
+        new(@"^(?<preset>.+)\.(?<major>[0-9]+)\.(?<minor>[0-9]+)\.binds$", RegexOptions.Compiled);
 
     private static readonly Regex StartPresetFileRegex =
         new(@"^StartPreset\.\d+\.start$", RegexOptions.Compiled);
@@ -71,8 +80,13 @@ public static class BindingsDiscovery
             var bindsMatch = BindsFileRegex.Match(name);
             if (bindsMatch.Success)
             {
-                var major = int.Parse(bindsMatch.Groups["major"].Value, CultureInfo.InvariantCulture);
-                var minor = int.Parse(bindsMatch.Groups["minor"].Value, CultureInfo.InvariantCulture);
+                if (!int.TryParse(bindsMatch.Groups["major"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+                    || !int.TryParse(bindsMatch.Groups["minor"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minor))
+                {
+                    log.Debug("Discovery", $"Bindings folder entry: {file} -> ignored (version number out of range)");
+                    continue;
+                }
+
                 var version = new BindsVersion(major, minor);
                 log.Info("Discovery", $"Binds file: {file} -> version {version}");
 

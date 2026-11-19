@@ -94,7 +94,11 @@ public sealed class DiagnosticLogWriter : IDiagnosticLog
     }
 
     private string LogPathFor(DateTimeOffset utcNow) =>
-        Path.Combine(_directory, $"lunapanel-{utcNow.UtcDateTime:yyyyMMdd}.log");
+        // Invariant on purpose: PurgeOldFiles parses this name back with
+        // InvariantCulture (Gregorian). Formatting with the current culture
+        // writes a Hijri (ar-SA) or Buddhist-era (th-TH) date there, which
+        // purge then reads as ancient and deletes.
+        Path.Combine(_directory, string.Create(CultureInfo.InvariantCulture, $"lunapanel-{utcNow.UtcDateTime:yyyyMMdd}.log"));
 
     private static string FormatLine(DiagnosticEvent diagnosticEvent, PathRedactor redactor)
     {
