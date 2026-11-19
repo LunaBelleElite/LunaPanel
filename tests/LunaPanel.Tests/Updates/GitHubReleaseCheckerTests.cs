@@ -261,6 +261,134 @@ public class GitHubReleaseCheckerTests
         Assert.Null(result);
     }
 
+    // ---- Download-URL pinning (the updater downloads and runs whatever URL
+    // ---- the release JSON carries, so the URL is constrained to this
+    // ---- repository's own release-download path). Hostile hosts below are
+    // ---- made-up (evil.example) except where a real GitHub host is the point.
+
+    private const string GoodName = "LunaPanel-ver-0.54.0.0.msi";
+    private const string GoodUrl = "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi";
+
+    private static string ReleaseJson(string tag, string assetName, string assetUrl) =>
+        System.Text.Json.JsonSerializer.Serialize(new
+        {
+            tag_name = tag,
+            assets = new[] { new { name = assetName, browser_download_url = assetUrl } },
+        });
+
+    public static TheoryData<string, string> RejectedAssetUrls() => new()
+    {
+        { "https://evil.example/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com.evil.example/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://raw.githubusercontent.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://objects.githubusercontent.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "http://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/Evil/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/Other/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com@evil.example/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://user:pw@github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com:8443/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/lunabelleelite/lunapanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/Download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/Other.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi?x=1", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi#frag", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/../../../../Evil/Repo/releases/download/v/x.msi", "x.msi" },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/../ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/%2e%2e/%2e%2e/%2e%2e/Evil/Repo/releases/download/v/x.msi", "x.msi" },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/%2E%2E/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0%2fLunaPanel-ver-0.54.0.0.msi", "LunaPanel-ver-0.54.0.0.msi" },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/..%5cx.msi", "..\\x.msi" },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0\\LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/sub/LunaPanel-ver-0.54.0.0.msi", "sub/LunaPanel-ver-0.54.0.0.msi" },
+        { "/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "javascript:alert(1)//LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "file:///C:/Windows/Temp/LunaPanel-ver-0.54.0.0.msi", GoodName },
+        { "https://github.com/LunaBelleElite/LunaPanel/releases/download/ver-0.54.0.0/" + new string('a', 3000) + ".msi", new string('a', 3000) + ".msi" },
+    };
+
+    [Fact]
+    public void IsTrustedAssetUrl_TheRealReleasePath_IsAccepted()
+    {
+        Assert.True(GitHubReleaseChecker.IsTrustedAssetUrl(GoodUrl, GoodName));
+    }
+
+    [Theory]
+    [MemberData(nameof(RejectedAssetUrls))]
+    public void IsTrustedAssetUrl_Hostile_IsRejected(string url, string name)
+    {
+        Assert.False(GitHubReleaseChecker.IsTrustedAssetUrl(url, name));
+    }
+
+    [Theory]
+    [MemberData(nameof(RejectedAssetUrls))]
+    public async Task GetLatestReleaseAsync_HostileAssetUrl_IsNull_NeverThrows_AndIsLogged(string url, string name)
+    {
+        var (checker, _, log) = Build(new CannedHandler(HttpStatusCode.OK, ReleaseJson("ver-0.54.0.0", name, url)));
+
+        var result = await checker.GetLatestReleaseAsync(CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Contains(log.Events, e => e.Level == DiagnosticLevel.Warn);
+    }
+
+    [Theory]
+    [InlineData("../x")]
+    [InlineData("ver-1.2")]
+    [InlineData("ver-1.2.3")]
+    [InlineData("")]
+    [InlineData("1.2.3.4")]
+    [InlineData("ver-1.2.3.4\n")]
+    [InlineData("ver-1.2.3.4-")]
+    [InlineData("ver-1.2.3.4-a/b")]
+    [InlineData("ver-\u0661.2.3.4")]
+    [InlineData("ver-1.2.3.4/../../x")]
+    public async Task GetLatestReleaseAsync_JunkTag_IsNull_NeverThrows(string tag)
+    {
+        var (checker, _, _) = Build(new CannedHandler(HttpStatusCode.OK, ReleaseJson(tag, GoodName, GoodUrl)));
+
+        var result = await checker.GetLatestReleaseAsync(CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData("ver-0.54.0.0")]
+    [InlineData("ver-1.4.6.1-dev")]
+    public void IsValidTag_RealTags_AreAccepted(string tag)
+    {
+        Assert.True(GitHubReleaseChecker.IsValidTag(tag));
+    }
+
+    /// <summary>
+    /// A hostile asset is skipped, not fatal: a later genuine asset on the
+    /// same release is still found, and the log names why without echoing
+    /// the whole hostile URL.
+    /// </summary>
+    [Fact]
+    public async Task GetLatestReleaseAsync_HostileAssetFirst_IsSkipped_AndTheGenuineOneIsReturned()
+    {
+        var hostile = "https://evil.example/" + new string('z', 500) + ".msi";
+        var body = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            tag_name = "ver-0.54.0.0",
+            assets = new[]
+            {
+                new { name = "Evil.msi", browser_download_url = hostile },
+                new { name = GoodName, browser_download_url = GoodUrl },
+            },
+        });
+        var (checker, _, log) = Build(new CannedHandler(HttpStatusCode.OK, body));
+
+        var result = await checker.GetLatestReleaseAsync(CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(GoodUrl, result!.DownloadUrl);
+        var warn = Assert.Single(log.Events, e => e.Level == DiagnosticLevel.Warn);
+        Assert.DoesNotContain(new string('z', 200), warn.Detail ?? "", StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// The real production entry point, built with no injected client -
     /// pinned because the only thing that ever calls it is the tray, which

@@ -121,10 +121,23 @@ internal sealed class UpdateCheckFlow
 
         try
         {
+            if (!Uri.TryCreate(release.DownloadUrl, UriKind.Absolute, out var downloadUri) || downloadUri.Scheme != Uri.UriSchemeHttps)
+            {
+                _log.Warn(LogCategory, "The update download was refused: the URL is not https", null);
+                return null;
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
 
             using var client = new HttpClient { Timeout = DownloadTimeout };
             using var response = await client.GetAsync(release.DownloadUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            // A redirect must not downgrade to http. The final host is deliberately NOT pinned: GitHub's asset CDN host changes.
+            if (response.RequestMessage?.RequestUri?.Scheme != Uri.UriSchemeHttps)
+            {
+                _log.Warn(LogCategory, "The update download was refused: a redirect left https", null);
+                return null;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 _log.Warn(LogCategory, "The update download was refused", $"status={(int)response.StatusCode} {response.StatusCode}");

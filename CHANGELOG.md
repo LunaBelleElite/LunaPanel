@@ -1,5 +1,11 @@
 # Changelog
 
+## ver-1.4.7.0 - 2026-11-19
+
+- Security: LunaPanel now only answers web requests that name it by its IP address, `localhost`, or the computer's own name. A web page you happen to visit can no longer trick your browser into talking to LunaPanel on your PC under some other name. If you reach LunaPanel through a custom DNS name or an alias, you'll now see a short refusal message - use the IP address from the tray's link, or the computer's name, instead.
+- Security: "Check for updates" now only accepts an installer from LunaPanel's own GitHub releases page, and refuses anything else. It can't, by itself, protect against someone taking over that GitHub account, since the installer isn't code-signed yet.
+- Updated: the .NET runtime inside LunaPanel's installer moves to 10.0.15, picking up Microsoft's latest security fixes. LunaPanel ships its own copy of .NET, so those fixes only reach you through a new LunaPanel release.
+
 ## ver-1.4.6.1 - 2026-11-19
 
 - GitHub's "new issue" page now has a link to the LunaPrograms Discord next to the bug report and feature idea forms, so if you'd rather ask a question or talk it through first, there's a place to do that. The forms are still there for bug reports and ideas.

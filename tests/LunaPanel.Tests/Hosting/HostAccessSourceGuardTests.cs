@@ -101,6 +101,46 @@ public class HostAccessSourceGuardTests
         Assert.Contains("context.Connection.LocalPort", content, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// [2026-11-19] The Host-header policy (DNS rebinding,
+    /// <c>ref/docs/hosting.md</c>) has to run BEFORE device authentication,
+    /// or the auth-exempt routes and the cookie-less host listener answer a
+    /// rebound page before the policy is ever consulted. Positional over the
+    /// one file both calls live in, and each call must appear exactly once -
+    /// a second, later copy would satisfy "before" while the first one moved.
+    /// </summary>
+    [Fact]
+    public void TheHostHeaderPolicy_RunsBeforeDeviceAuthentication()
+    {
+        var content = ReadServerSource("Hosting", "ServerHostBuilder.cs");
+        const string policy = "app.UseHostHeaderPolicy(";
+        const string auth = "app.UseDeviceAuthentication(";
+
+        var policyAt = content.IndexOf(policy, StringComparison.Ordinal);
+        var authAt = content.IndexOf(auth, StringComparison.Ordinal);
+
+        Assert.True(policyAt >= 0, "UseHostHeaderPolicy is not wired at all.");
+        Assert.True(authAt >= 0, "UseDeviceAuthentication is not wired at all.");
+        Assert.Equal(policyAt, content.LastIndexOf(policy, StringComparison.Ordinal));
+        Assert.Equal(authAt, content.LastIndexOf(auth, StringComparison.Ordinal));
+        Assert.True(policyAt < authAt, "UseHostHeaderPolicy must come before UseDeviceAuthentication.");
+    }
+
+    /// <summary>
+    /// [2026-11-19] The policy refuses requests; it never says who the host
+    /// is. Nothing in it may name <c>HostRequest</c> or write the item the
+    /// auth middleware's host decision lives under.
+    /// </summary>
+    [Fact]
+    public void TheHostHeaderPolicy_NeverFeedsTheHostDecision()
+    {
+        var content = ReadServerSource("Http", "HostHeaderPolicy.cs");
+
+        Assert.DoesNotContain("HostRequest", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsHostRequestItemKey", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("context.Items", content, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void RealServerEnvironment_ConfiguresAHostAccessPort()
     {

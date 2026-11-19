@@ -495,6 +495,12 @@ public static class ServerHostBuilder
             LatchDefaults.SweepInterval,
             lifetime.ApplicationStopping);
 
+        // DNS rebinding (ref/docs/hosting.md): refuse any request whose Host
+        // header is not one of ours, BEFORE authentication, so it covers the
+        // auth-exempt routes too. It only ever refuses - host trust is still
+        // decided from the connection alone, below.
+        app.UseHostHeaderPolicy(log, HostHeaderPolicy.TrustedNamesFor(Environment.MachineName));
+
         app.UseDeviceAuthentication(deviceRegistry, log, options.HostAccessPort);
 
         // The panel client itself - the page a commander actually taps.

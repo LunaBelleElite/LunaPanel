@@ -52,6 +52,36 @@ public class UpdateFlowSourceGuardTests
 
     private static string PackageWxsSource() => Read("installer", "Package.wxs");
 
+    private static string DownloadAsyncBody()
+    {
+        var source = UpdateCheckFlowSource();
+        var start = source.IndexOf("private async Task<string?> DownloadAsync(ReleaseInfo release)", StringComparison.Ordinal);
+        Assert.True(start >= 0, "DownloadAsync not found in UpdateCheckFlow.cs.");
+        var end = source.IndexOf("private void StartInstaller", start, StringComparison.Ordinal);
+        Assert.True(end > start, "StartInstaller not found after DownloadAsync.");
+        return source[start..end];
+    }
+
+    /// <summary>
+    /// The download refuses a non-https URL BEFORE any request is made, and
+    /// re-checks the scheme of the final (post-redirect) URL so a redirect
+    /// cannot downgrade to http. The needles are scoped to DownloadAsync's
+    /// own body, so another https mention elsewhere in the file cannot
+    /// satisfy them.
+    /// </summary>
+    [Fact]
+    public void UpdateCheckFlow_DownloadRefusesNonHttps_BeforeRequesting_AndChecksTheFinalScheme()
+    {
+        var body = DownloadAsyncBody();
+
+        var refusal = body.IndexOf("downloadUri.Scheme != Uri.UriSchemeHttps", StringComparison.Ordinal);
+        var request = body.IndexOf("client.GetAsync(", StringComparison.Ordinal);
+        Assert.True(refusal >= 0, "DownloadAsync must refuse a non-https download URL.");
+        Assert.True(request >= 0);
+        Assert.True(refusal < request, "The https refusal must come before the request is sent.");
+        Assert.Contains("response.RequestMessage?.RequestUri?.Scheme != Uri.UriSchemeHttps", body, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Pins the whole argument string as one literal, not each switch
     /// separately.

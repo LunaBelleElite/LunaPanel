@@ -2146,7 +2146,7 @@ public class ServerHostBuilderTests
         {
             Content = new StringContent("""{ "name": "Spoof", "steps": [ { "wait": 5 } ] }""", System.Text.Encoding.UTF8, "application/json"),
         };
-        AddSpoofedLocalHeaders(spoofed, "127.0.0.1");
+        AddSpoofedLocalHeaders(spoofed, "127.0.0.1", client.BaseAddress!.Port);
 
         var response = await client.SendAsync(spoofed);
 
@@ -2159,19 +2159,229 @@ public class ServerHostBuilderTests
         {
             Content = new StringContent("""{ "name": "Still me", "steps": [ { "wait": 5 } ] }""", System.Text.Encoding.UTF8, "application/json"),
         };
-        AddSpoofedLocalHeaders(disowned, "203.0.113.9");
+        AddSpoofedLocalHeaders(disowned, "203.0.113.9", host.HostClient.BaseAddress!.Port);
 
         Assert.Equal(HttpStatusCode.OK, (await host.HostClient.SendAsync(disowned)).StatusCode);
     }
 
-    private static void AddSpoofedLocalHeaders(HttpRequestMessage request, string claimedAddress)
+    /// <remarks>
+    /// [2026-11-19, superseded fixture input - expectations unchanged] The
+    /// spoofed <c>Host</c> was the bare <c>claimedAddress</c> (before:
+    /// <c>Host: 127.0.0.1</c> / <c>Host: 203.0.113.9</c>, no port). The
+    /// Host-header policy (DNS rebinding, <c>HostHeaderPolicy</c>) now refuses
+    /// a Host whose port is not the arrival port with a 400 before
+    /// authentication, which turned this test's 403 and 200 into 400s for a
+    /// reason unrelated to what it pins. It now carries the arrival port
+    /// (after: <c>Host: 127.0.0.1:&lt;port&gt;</c>), an IP literal the policy
+    /// lets through, so the claim under test - a Host naming a DIFFERENT
+    /// address neither grants nor removes host status - is still exercised.
+    /// A foreign Host being refused outright is pinned separately by the
+    /// <c>ForeignHost_*</c> tests below.
+    /// </remarks>
+    private static void AddSpoofedLocalHeaders(HttpRequestMessage request, string claimedAddress, int arrivalPort)
     {
         request.Headers.TryAddWithoutValidation("X-Forwarded-For", claimedAddress);
         request.Headers.TryAddWithoutValidation("X-Forwarded-Host", claimedAddress);
         request.Headers.TryAddWithoutValidation("X-Real-IP", claimedAddress);
-        request.Headers.TryAddWithoutValidation("Host", claimedAddress);
+        request.Headers.TryAddWithoutValidation("Host", $"{claimedAddress}:{arrivalPort}");
         request.Headers.TryAddWithoutValidation("Origin", $"http://{claimedAddress}");
         request.Headers.TryAddWithoutValidation("Referer", $"http://{claimedAddress}/");
+    }
+
+    // -------------------------------------------------------------------
+    // DNS rebinding: the Host-header policy (HostHeaderPolicy,
+    // ref/docs/hosting.md "DNS rebinding and the Host header"). A rebinding
+    // page makes the BROWSER send its own domain as Host to our socket; the
+    // policy refuses every such request before authentication, on both
+    // listeners, auth-exempt routes included.
+    // -------------------------------------------------------------------
+
+    private const string RefusalBody = "LunaPanel only answers to its IP address or this computer's name.";
+
+    private static HttpRequestMessage WithHost(HttpMethod method, string path, string hostHeader, HttpContent? content = null)
+    {
+        var request = new HttpRequestMessage(method, path) { Content = content };
+        request.Headers.Host = hostHeader;
+        return request;
+    }
+
+    private static async Task AssertRefusedByHostPolicyAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(RefusalBody, body);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+    }
+
+    public static TheoryData<string, string> ForeignHostRoutes => new()
+    {
+        // Auth-exempt: reachable by anyone before the policy existed.
+        { "GET", ApiPaths.Health },
+        { "GET", ApiPaths.App },
+        { "POST", ApiPaths.Pair },
+        // Authenticated, and host-only.
+        { "GET", ApiPaths.Diagnostics },
+        { "GET", ApiPaths.Macros },
+        { "POST", ApiPaths.Macros },
+    };
+
+    /// <summary>
+    /// The rebinding shape on the LOOPBACK host listener - the one that
+    /// matters, because a request there is the host with no cookie at all.
+    /// Every route, exempt or not, gets the policy's 400 rather than
+    /// reaching its handler.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ForeignHostRoutes))]
+    public async Task ForeignHost_OnTheHostListener_IsRefusedBeforeAnyRoute(string method, string path)
+    {
+        await using var host = await RunningHost.StartAsync(withHostAccess: true);
+        var port = host.HostClient.BaseAddress!.Port;
+
+        var response = await host.HostClient.SendAsync(WithHost(
+            new HttpMethod(method), path, $"evil.example:{port}",
+            method == "POST" ? new StringContent("{}", System.Text.Encoding.UTF8, "application/json") : null));
+
+        await AssertRefusedByHostPolicyAsync(response);
+    }
+
+    [Theory]
+    [MemberData(nameof(ForeignHostRoutes))]
+    public async Task ForeignHost_OnTheDeviceListener_IsRefusedBeforeAnyRoute(string method, string path)
+    {
+        await using var host = await RunningHost.StartAsync(withHostAccess: true);
+        var port = host.Client.BaseAddress!.Port;
+
+        var response = await host.Client.SendAsync(WithHost(
+            new HttpMethod(method), path, $"evil.example:{port}",
+            method == "POST" ? new StringContent("{}", System.Text.Encoding.UTF8, "application/json") : null));
+
+        await AssertRefusedByHostPolicyAsync(response);
+    }
+
+    /// <summary>
+    /// "Not reaching any route", observed through side effects rather than
+    /// inferred from a status code: a pair carrying the CORRECT code creates
+    /// no device, and a host-listener macro save creates no macro. Both would
+    /// succeed with an ordinary Host header (the last two assertions prove
+    /// the requests were otherwise good).
+    /// </summary>
+    [Fact]
+    public async Task ForeignHost_ReachesNoHandler_ACorrectPairAndAHostMacroSaveBothDoNothing()
+    {
+        await using var host = await RunningHost.StartAsync(withHostAccess: true);
+        var registry = host.App.Services.GetRequiredService<DeviceRegistry>();
+        var devicePort = host.Client.BaseAddress!.Port;
+        var hostPort = host.HostClient.BaseAddress!.Port;
+
+        var pairJson = JsonSerializer.Serialize(new { code = registry.CurrentCode, deviceName = "Rebound", deviceClass = "phone" });
+        var pair = await host.Client.SendAsync(WithHost(
+            HttpMethod.Post, ApiPaths.Pair, $"evil.example:{devicePort}",
+            new StringContent(pairJson, System.Text.Encoding.UTF8, "application/json")));
+        await AssertRefusedByHostPolicyAsync(pair);
+        Assert.Empty(registry.ListDevices());
+
+        var save = await host.HostClient.SendAsync(WithHost(
+            HttpMethod.Post, ApiPaths.Macros, $"evil.example:{hostPort}",
+            new StringContent("""{ "name": "Rebound macro", "steps": [ { "wait": 5 } ] }""", System.Text.Encoding.UTF8, "application/json")));
+        await AssertRefusedByHostPolicyAsync(save);
+
+        var macros = await (await host.HostClient.GetAsync(ApiPaths.Macros)).Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Rebound macro", macros, StringComparison.Ordinal);
+
+        // The same two requests with an ordinary Host do succeed.
+        var realPair = await host.Client.PostAsync(ApiPaths.Pair, new StringContent(pairJson, System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, realPair.StatusCode);
+        Assert.Single(registry.ListDevices());
+        await SaveMacroAsync(host, """{ "name": "Rebound macro", "steps": [ { "wait": 5 } ] }""");
+        var after = await (await host.HostClient.GetAsync(ApiPaths.Macros)).Content.ReadAsStringAsync();
+        Assert.Contains("Rebound macro", after, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The names a real browser sends are unchanged on both listeners: the
+    /// IP literal HttpClient writes by default, <c>localhost</c>, and this
+    /// machine's own name (read at run time, never written into this file).
+    /// </summary>
+    [Fact]
+    public async Task OurOwnHostNames_AreAnsweredNormally_OnBothListeners()
+    {
+        await using var host = await RunningHost.StartAsync(withHostAccess: true);
+
+        foreach (var client in new[] { host.Client, host.HostClient })
+        {
+            var port = client.BaseAddress!.Port;
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(ApiPaths.Health)).StatusCode);
+
+            foreach (var name in new[] { "127.0.0.1", "localhost", "LOCALHOST", Environment.MachineName, $"{Environment.MachineName}.local" })
+            {
+                var response = await client.SendAsync(WithHost(HttpMethod.Get, ApiPaths.Health, $"{name}:{port}"));
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            }
+        }
+
+        // And host status is still the connection's: the host listener's
+        // page offers authoring, the device listener's does not, whatever
+        // name each was reached by.
+        var hostPage = await (await host.HostClient.SendAsync(WithHost(HttpMethod.Get, ApiPaths.App, $"localhost:{host.HostClient.BaseAddress!.Port}"))).Content.ReadAsStringAsync();
+        var devicePage = await (await host.Client.SendAsync(WithHost(HttpMethod.Get, ApiPaths.App, $"localhost:{host.Client.BaseAddress!.Port}"))).Content.ReadAsStringAsync();
+        Assert.Contains("const CAN_AUTHOR_MACROS = true;", hostPage, StringComparison.Ordinal);
+        Assert.Contains("const CAN_AUTHOR_MACROS = false;", devicePage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A Host naming the OTHER listener's port is refused: the port has to
+    /// be the one the request arrived on.
+    /// </summary>
+    [Fact]
+    public async Task AHostNamingTheOtherListenersPort_IsRefused()
+    {
+        await using var host = await RunningHost.StartAsync(withHostAccess: true);
+        var devicePort = host.Client.BaseAddress!.Port;
+        var hostPort = host.HostClient.BaseAddress!.Port;
+
+        await AssertRefusedByHostPolicyAsync(await host.HostClient.SendAsync(WithHost(HttpMethod.Get, ApiPaths.Health, $"127.0.0.1:{devicePort}")));
+        await AssertRefusedByHostPolicyAsync(await host.Client.SendAsync(WithHost(HttpMethod.Get, ApiPaths.Health, $"127.0.0.1:{hostPort}")));
+    }
+
+    /// <summary>
+    /// One Warn per distinct rejected value, capped, truncated - so a user
+    /// with a custom DNS alias can see why, and a hostile page cannot flood
+    /// the log or write an unbounded value into it.
+    /// </summary>
+    [Fact]
+    public async Task RefusedHosts_AreLoggedOncePerDistinctValue_Capped_AndTruncated()
+    {
+        await using var host = await RunningHost.StartAsync();
+        var port = host.Client.BaseAddress!.Port;
+
+        for (var i = 0; i < 3; i++)
+        {
+            await AssertRefusedByHostPolicyAsync(await host.Client.SendAsync(WithHost(HttpMethod.Get, ApiPaths.Health, $"evil.example:{port}")));
+        }
+
+        var longName = new string('q', 200) + ".example";
+        await AssertRefusedByHostPolicyAsync(await host.Client.SendAsync(WithHost(HttpMethod.Get, ApiPaths.Health, $"{longName}:{port}")));
+
+        for (var i = 0; i < 30; i++)
+        {
+            await AssertRefusedByHostPolicyAsync(await host.Client.SendAsync(WithHost(HttpMethod.Get, ApiPaths.Health, $"flood{i}.example:{port}")));
+        }
+
+        var warnings = host.App.Services.GetRequiredService<DiagnosticRingBuffer>().Snapshot()
+            .Where(e => e.Category == "Auth" && e.Level == DiagnosticLevel.Warn && e.Message.Contains("Host header", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Single(warnings, e => e.Detail == $"evil.example:{port}");
+        Assert.DoesNotContain(warnings, e => e.Detail is not null && e.Detail.Contains(longName, StringComparison.Ordinal));
+        Assert.Single(warnings, e => e.Detail is not null && e.Detail.StartsWith(new string('q', 40), StringComparison.Ordinal));
+        Assert.All(warnings, e => Assert.True(e.Detail is null || e.Detail.Length <= 80, e.Detail));
+
+        // 20 distinct values logged, then exactly one "no more" line.
+        Assert.Equal(20, warnings.Count(e => e.Detail is not null));
+        Assert.Single(warnings, e => e.Detail is null);
+        Assert.DoesNotContain(warnings, e => e.Detail == $"flood29.example:{port}");
     }
 
     /// <summary>

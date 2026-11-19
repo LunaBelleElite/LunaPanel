@@ -8,6 +8,23 @@
   </PropertyGroup>
 
   <!--
+    The .NET runtime the MSI carries. LunaPanel ships self-contained, so an
+    installed copy runs exactly the runtime it was built with until a new MSI
+    replaces it: Microsoft's security patches for .NET reach users only
+    through a new LunaPanel release. Left alone, the SDK would pick the patch
+    it bundles (10.0.11 for SDK 10.0.400); this pins the patch that ships.
+    Self-contained builds only (the MSI publish), so the unit tests and
+    ordinary framework-dependent builds keep running on whatever runtime is
+    installed. Raise it at each .NET 10 servicing release; the matching
+    runtime packs (win-x64: NETCore.App, AspNetCore.App, WindowsDesktop.App)
+    must be in the local NuGet cache first, because this repo restores
+    offline (NuGet.Config).
+  -->
+  <PropertyGroup Condition="'$(SelfContained)' == 'true'">
+    <RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
+  </PropertyGroup>
+
+  <!--
     Stamps the running version onto every project imported by this file
     (i.e. every project in the repo, including LunaPanel.Tests and
     LunaPanel.Probe - harmless for both, see the remark below) from

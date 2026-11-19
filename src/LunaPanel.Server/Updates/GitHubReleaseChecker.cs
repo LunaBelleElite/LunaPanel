@@ -36,7 +36,28 @@ public sealed class GitHubReleaseChecker : IReleaseChecker
     /// and making it one would be a way to point a silent installer at an
     /// arbitrary MSI.
     /// </summary>
-    public const string LatestReleaseUrl = "https://api.github.com/repos/LunaBelleElite/LunaPanel/releases/latest";
+    public const string LatestReleaseUrl = "https://api.github.com/repos/" + RepoSlug + "/releases/latest";
+
+    /// <summary>
+    /// The one place the repository's owner/name is written. The API URL
+    /// above and the download-path rule below both derive from it.
+    /// </summary>
+    private const string RepoSlug = "LunaBelleElite/LunaPanel";
+
+    /// <summary>The only path an installer asset may be downloaded from.</summary>
+    private const string DownloadPathPrefix = "/" + RepoSlug + "/releases/download/";
+
+    private const string DownloadHost = "github.com";
+
+    private const int MaxUrlLength = 2048;
+
+    /// <summary>
+    /// [0-9] and <c>\z</c>, not <c>\d</c> and <c>$</c>: <c>\d</c> matches
+    /// non-ASCII digits and <c>$</c> allows a trailing newline.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex TagPattern = new(
+        @"^ver-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?\z",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
     /// GitHub's API refuses a request that does not identify its caller, so
@@ -162,6 +183,12 @@ public sealed class GitHubReleaseChecker : IReleaseChecker
             return null;
         }
 
+        if (!IsValidTag(tagElement.GetString()))
+        {
+            _log.Warn(LogCategory, "The latest release's tag is not a LunaPanel version; ignoring it", $"tag={Truncate(tagElement.GetString())}");
+            return null;
+        }
+
         if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
             _log.Warn(LogCategory, "The latest release carried no assets", null);
@@ -191,10 +218,92 @@ public sealed class GitHubReleaseChecker : IReleaseChecker
                 continue;
             }
 
+            if (!IsTrustedAssetUrl(url, name))
+            {
+                _log.Warn(LogCategory, "Skipped an .msi asset whose download URL is not this repository's release path", $"url={Truncate(url)}");
+                continue;
+            }
+
             return new ReleaseInfo(tagElement.GetString()!, url);
         }
 
         _log.Warn(LogCategory, "The latest release carried no downloadable .msi asset", null);
         return null;
+    }
+
+    private static string Truncate(string? value) =>
+        value is null ? "" : value.Length <= 80 ? value : value[..80] + "...";
+
+    /// <summary>True when the tag is <c>ver-A.B.C.D</c> with an optional alphanumeric <c>-suffix</c>.</summary>
+    public static bool IsValidTag(string? tag) => tag is not null && TagPattern.IsMatch(tag);
+
+    /// <summary>
+    /// True only for an https URL on exactly github.com, under this
+    /// repository's <c>/releases/download/</c> path, whose last segment is
+    /// the asset's own name. Public (not internal) because LunaPanel.Server
+    /// has no InternalsVisibleTo grant to the test assembly.
+    ///
+    /// Path rule, decided: <see cref="Uri"/> turns backslashes into slashes
+    /// and collapses dot segments before <c>AbsolutePath</c> is read, so the
+    /// RAW string is refused first for any backslash, dot segment, or encoded
+    /// dot/slash/backslash; only then is the path split into segments,
+    /// percent-decoded per segment, and compared (case-sensitively) to the
+    /// prefix and the asset name. Any decoded segment containing a separator
+    /// is refused.
+    /// </summary>
+    public static bool IsTrustedAssetUrl(string url, string assetName)
+    {
+        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(assetName) || url.Length > MaxUrlLength)
+        {
+            return false;
+        }
+
+        if (url.Contains('\\') || assetName.Contains('/') || assetName.Contains('\\'))
+        {
+            return false;
+        }
+
+        foreach (var banned in new[] { "%2e", "%2f", "%5c" })
+        {
+            if (url.Contains(banned, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, DownloadHost, StringComparison.OrdinalIgnoreCase)
+            || uri.UserInfo.Length != 0
+            || !uri.IsDefaultPort
+            || uri.Query.Length != 0
+            || uri.Fragment.Length != 0)
+        {
+            return false;
+        }
+
+        // Uri has already collapsed any dot segment in AbsolutePath, so look at the raw string too.
+        if (url.Split('/').Any(s => s == "." || s == ".."))
+        {
+            return false;
+        }
+
+        var segments = uri.AbsolutePath.Split('/');
+        foreach (var raw in segments)
+        {
+            var decoded = Uri.UnescapeDataString(raw);
+            if (decoded == "." || decoded == ".." || decoded.Contains('/') || decoded.Contains('\\'))
+            {
+                return false;
+            }
+        }
+
+        if (!uri.AbsolutePath.StartsWith(DownloadPathPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var last = Uri.UnescapeDataString(segments[^1]);
+        return last.Length != 0 && string.Equals(last, assetName, StringComparison.Ordinal);
     }
 }
